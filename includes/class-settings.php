@@ -75,6 +75,20 @@ class Settings {
 			'agoodbug_general'
 		);
 
+		add_settings_field(
+			'rate_limit',
+			__( 'Rate Limit', 'agoodbug' ),
+			[ $this, 'render_number_field' ],
+			'agoodbug',
+			'agoodbug_general',
+			[
+				'name'        => 'rate_limit',
+				'description' => __( 'Maximum number of reports per user per hour. Set to 0 for unlimited.', 'agoodbug' ),
+				'min'         => 0,
+				'max'         => 1000,
+			]
+		);
+
 		// Destinations section
 		add_settings_section(
 			'agoodbug_destinations',
@@ -378,6 +392,27 @@ class Settings {
 		$value    = $settings[ $args['name'] ] ?? '';
 		?>
 		<input type="password" name="<?php echo esc_attr( self::OPTION_NAME . '[' . $args['name'] . ']' ); ?>" value="<?php echo esc_attr( $value ); ?>" class="regular-text" autocomplete="off" />
+		<?php if ( ! empty( $args['description'] ) ) : ?>
+			<p class="description"><?php echo esc_html( $args['description'] ); ?></p>
+		<?php endif; ?>
+		<?php
+	}
+
+	/**
+	 * Render number field
+	 *
+	 * @param array $args Field arguments.
+	 */
+	public function render_number_field( $args ) {
+		$settings = get_option( self::OPTION_NAME, $this->get_defaults() );
+		$value    = $settings[ $args['name'] ] ?? 0;
+		$min      = $args['min'] ?? 0;
+		$max      = $args['max'] ?? 1000;
+		?>
+		<input type="number" name="<?php echo esc_attr( self::OPTION_NAME . '[' . $args['name'] . ']' ); ?>" value="<?php echo esc_attr( $value ); ?>" min="<?php echo esc_attr( $min ); ?>" max="<?php echo esc_attr( $max ); ?>" class="small-text" />
+		<?php if ( ! empty( $args['description'] ) ) : ?>
+			<p class="description"><?php echo esc_html( $args['description'] ); ?></p>
+		<?php endif; ?>
 		<?php
 	}
 

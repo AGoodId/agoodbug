@@ -107,10 +107,15 @@ class REST_API {
 	 * @return bool|\WP_Error
 	 */
 	private function check_rate_limit() {
-		$user_id  = get_current_user_id();
 		$settings = Plugin::get_settings();
-		$limit    = $settings['rate_limit'] ?? 10;
+		$limit    = (int) ( $settings['rate_limit'] ?? 10 );
 
+		// 0 = unlimited
+		if ( $limit === 0 ) {
+			return true;
+		}
+
+		$user_id       = get_current_user_id();
 		$transient_key = self::RATE_LIMIT_PREFIX . $user_id;
 		$count         = get_transient( $transient_key );
 
