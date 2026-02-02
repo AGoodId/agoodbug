@@ -32,6 +32,18 @@ class AGoodApp {
 
 		$user = wp_get_current_user();
 
+		// Handle reporter info for both logged-in and anonymous users
+		if ( $user->ID > 0 ) {
+			$reporter_name  = $user->display_name;
+			$reporter_email = $user->user_email;
+		} elseif ( ! empty( $data['email'] ) ) {
+			$reporter_name  = $data['email'];
+			$reporter_email = $data['email'];
+		} else {
+			$reporter_name  = __( 'Anonymous', 'agoodbug' );
+			$reporter_email = '';
+		}
+
 		// Build issue data
 		$issue_data = [
 			'title'          => sprintf(
@@ -42,8 +54,8 @@ class AGoodApp {
 			'description'    => $this->build_description( $data, $screenshot_url ),
 			'category'       => 'tekniskt',
 			'priority'       => 'medel',
-			'reporter_name'  => $user->display_name,
-			'reporter_email' => $user->user_email,
+			'reporter_name'  => $reporter_name,
+			'reporter_email' => $reporter_email,
 			'tags'           => [ 'agoodbug', 'frontend' ],
 		];
 

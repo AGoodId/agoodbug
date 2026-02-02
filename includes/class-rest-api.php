@@ -142,80 +142,116 @@ class REST_API {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public function submit_feedback( $request ) {
-		// Check rate limit
-		$rate_check = $this->check_rate_limit();
-		if ( is_wp_error( $rate_check ) ) {
-			return $rate_check;
-		}
+		try {
+			// Check rate limit
+			$rate_check = $this->check_rate_limit();
+			if ( is_wp_error( $rate_check ) ) {
+				return $rate_check;
+			}
 
-		$data = [
-			'screenshot' => $request->get_param( 'screenshot' ),
-			'url'        => $request->get_param( 'url' ),
-			'comment'    => $request->get_param( 'comment' ),
-			'email'      => $request->get_param( 'email' ),
-			'selection'  => $request->get_param( 'selection' ),
-			'viewport'   => $request->get_param( 'viewport' ),
-			'browser'    => $request->get_param( 'browser' ),
-		];
+			$data = [
+				'screenshot' => $request->get_param( 'screenshot' ),
+				'url'        => $request->get_param( 'url' ),
+				'comment'    => $request->get_param( 'comment' ),
+				'email'      => $request->get_param( 'email' ),
+				'selection'  => $request->get_param( 'selection' ),
+				'viewport'   => $request->get_param( 'viewport' ),
+				'browser'    => $request->get_param( 'browser' ),
+			];
 
-		// Validate screenshot data
-		if ( strpos( $data['screenshot'], 'data:image/' ) !== 0 ) {
+			// Validate screenshot data
+			if ( strpos( $data['screenshot'], 'data:image/' ) !== 0 ) {
+				return new \WP_Error(
+					'invalid_screenshot',
+					__( 'Invalid screenshot format.', 'agoodbug' ),
+					[ 'status' => 400 ]
+				);
+			}
+
+			$settings     = Plugin::get_settings();
+			$destinations = $settings['destinations'] ?? [ 'cpt' ];
+			$results      = [];
+
+			// Always save to CPT first
+			$post_id = Feedback_CPT::create_feedback( $data );
+
+			if ( is_wp_error( $post_id ) ) {
+				return $post_id;
+			}
+
+			$results['cpt'] = true;
+
+			// Get screenshot URL for integrations
+			$screenshot_id  = get_post_meta( $post_id, '_screenshot_id', true );
+			$screenshot_url = $screenshot_id ? wp_get_attachment_url( $screenshot_id ) : '';
+
+			// Send to email (wrapped in try-catch)
+			if ( in_array( 'email', $destinations, true ) ) {
+				try {
+					$email = new Integrations\Email();
+					$results['email'] = $email->send( $data, $screenshot_url, $post_id );
+				} catch ( \Exception $e ) {
+					$results['email'] = false;
+					error_log( 'AGoodBug - Email error: ' . $e->getMessage() );
+				}
+			}
+
+			// Send to AGoodApp (wrapped in try-catch)
+			if ( in_array( 'agoodapp', $destinations, true ) && ! empty( $settings['agoodapp_enabled'] ) ) {
+				try {
+					$agoodapp = new Integrations\AGoodApp();
+					$results['agoodapp'] = $agoodapp->send( $data, $screenshot_url, $post_id );
+				} catch ( \Exception $e ) {
+					$results['agoodapp'] = false;
+					error_log( 'AGoodBug - AGoodApp error: ' . $e->getMessage() );
+				}
+			}
+
+			// Send to Checkvist (wrapped in try-catch)
+			if ( in_array( 'checkvist', $destinations, true ) && ! empty( $settings['checkvist_enabled'] ) ) {
+				try {
+					$checkvist = new Integrations\Checkvist();
+					$results['checkvist'] = $checkvist->send( $data, $screenshot_url, $post_id );
+				} catch ( \Exception $e ) {
+					$results['checkvist'] = false;
+					error_log( 'AGoodBug - Checkvist error: ' . $e->getMessage() );
+				}
+			}
+
+			// Send to GitHub (wrapped in try-catch)
+			if ( in_array( 'github', $destinations, true ) && ! empty( $settings['github_enabled'] ) ) {
+				try {
+					$github = new Integrations\GitHub();
+					$results['github'] = $github->send( $data, $screenshot_url, $post_id );
+				} catch ( \Exception $e ) {
+					$results['github'] = false;
+					error_log( 'AGoodBug - GitHub error: ' . $e->getMessage() );
+				}
+			}
+
+			// Save destination results
+			update_post_meta( $post_id, '_destination_results', wp_json_encode( $results ) );
+
+			return rest_ensure_response( [
+				'success'      => true,
+				'feedback_id'  => $post_id,
+				'destinations' => $results,
+			] );
+		} catch ( \Exception $e ) {
+			error_log( 'AGoodBug - Submit feedback error: ' . $e->getMessage() );
 			return new \WP_Error(
-				'invalid_screenshot',
-				__( 'Invalid screenshot format.', 'agoodbug' ),
-				[ 'status' => 400 ]
+				'submit_error',
+				$e->getMessage(),
+				[ 'status' => 500 ]
+			);
+		} catch ( \Error $e ) {
+			error_log( 'AGoodBug - Submit feedback fatal error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+			return new \WP_Error(
+				'fatal_error',
+				'A fatal error occurred: ' . $e->getMessage(),
+				[ 'status' => 500 ]
 			);
 		}
-
-		$settings     = Plugin::get_settings();
-		$destinations = $settings['destinations'] ?? [ 'cpt' ];
-		$results      = [];
-
-		// Always save to CPT first
-		$post_id = Feedback_CPT::create_feedback( $data );
-
-		if ( is_wp_error( $post_id ) ) {
-			return $post_id;
-		}
-
-		$results['cpt'] = true;
-
-		// Get screenshot URL for integrations
-		$screenshot_id  = get_post_meta( $post_id, '_screenshot_id', true );
-		$screenshot_url = $screenshot_id ? wp_get_attachment_url( $screenshot_id ) : '';
-
-		// Send to email
-		if ( in_array( 'email', $destinations, true ) ) {
-			$email = new Integrations\Email();
-			$results['email'] = $email->send( $data, $screenshot_url, $post_id );
-		}
-
-		// Send to AGoodApp
-		if ( in_array( 'agoodapp', $destinations, true ) && ! empty( $settings['agoodapp_enabled'] ) ) {
-			$agoodapp = new Integrations\AGoodApp();
-			$results['agoodapp'] = $agoodapp->send( $data, $screenshot_url, $post_id );
-		}
-
-		// Send to Checkvist
-		if ( in_array( 'checkvist', $destinations, true ) && ! empty( $settings['checkvist_enabled'] ) ) {
-			$checkvist = new Integrations\Checkvist();
-			$results['checkvist'] = $checkvist->send( $data, $screenshot_url, $post_id );
-		}
-
-		// Send to GitHub
-		if ( in_array( 'github', $destinations, true ) && ! empty( $settings['github_enabled'] ) ) {
-			$github = new Integrations\GitHub();
-			$results['github'] = $github->send( $data, $screenshot_url, $post_id );
-		}
-
-		// Save destination results
-		update_post_meta( $post_id, '_destination_results', wp_json_encode( $results ) );
-
-		return rest_ensure_response( [
-			'success'      => true,
-			'feedback_id'  => $post_id,
-			'destinations' => $results,
-		] );
 	}
 
 	/**
