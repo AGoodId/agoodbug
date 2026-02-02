@@ -327,9 +327,22 @@
 	cursor: not-allowed;
 }
 
+/* Ensure hidden attribute works with flex */
+.agoodbug-modal__body[hidden],
+.agoodbug-modal__actions[hidden],
+.agoodbug-modal__success[hidden],
+.agoodbug-modal__error[hidden] {
+	display: none !important;
+}
+
 /* Success/Error States */
 .agoodbug-modal__success,
 .agoodbug-modal__error {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	padding: 48px 24px;
 	text-align: center;
 }

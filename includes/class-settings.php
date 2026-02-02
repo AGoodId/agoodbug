@@ -177,12 +177,28 @@ class Settings {
 		);
 
 		add_settings_field(
+			'checkvist_username',
+			__( 'Username (Email)', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_checkvist',
+			[
+				'name'        => 'checkvist_username',
+				'placeholder' => 'your@email.com',
+				'description' => __( 'Your Checkvist account email address.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
 			'checkvist_api_key',
 			__( 'API Key', 'agoodbug' ),
 			[ $this, 'render_password_field' ],
 			'agoodbug',
 			'agoodbug_checkvist',
-			[ 'name' => 'checkvist_api_key' ]
+			[
+				'name'        => 'checkvist_api_key',
+				'description' => __( 'Get this from Checkvist Settings → Integration → Remote API key.', 'agoodbug' ),
+			]
 		);
 
 		add_settings_field(
@@ -250,6 +266,7 @@ class Settings {
 			'agoodapp_token'     => '',
 			'agoodapp_org_id'    => '',
 			'checkvist_enabled'  => false,
+			'checkvist_username' => '',
 			'checkvist_api_key'  => '',
 			'checkvist_list_id'  => '',
 			'github_enabled'     => false,
@@ -287,6 +304,7 @@ class Settings {
 
 		// Checkvist
 		$sanitized['checkvist_enabled']  = ! empty( $input['checkvist_enabled'] );
+		$sanitized['checkvist_username'] = sanitize_email( $input['checkvist_username'] ?? '' );
 		$sanitized['checkvist_api_key']  = sanitize_text_field( $input['checkvist_api_key'] ?? '' );
 		$sanitized['checkvist_list_id']  = sanitize_text_field( $input['checkvist_list_id'] ?? '' );
 
