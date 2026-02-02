@@ -3,7 +3,7 @@
  * Plugin Name: AGoodBug
  * Plugin URI: https://github.com/AGoodId/agoodbug
  * Description: Visual feedback and bug reporting widget with screenshot capture.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: AGoodId
  * Author URI: https://agoodid.se
  * License: GPL-2.0+
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'AGOODBUG_VERSION', '1.0.4' );
+define( 'AGOODBUG_VERSION', '1.0.5' );
 define( 'AGOODBUG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -39,17 +39,26 @@ spl_autoload_register( function ( $class ) {
 	// Remove namespace prefix
 	$class_name = str_replace( 'AGoodBug\\', '', $class );
 
-	// Convert to file path
-	$class_name = strtolower( $class_name );
-	$class_name = str_replace( '_', '-', $class_name );
-	$class_name = str_replace( '\\', '/', $class_name );
+	// Split into parts (e.g., Integrations\Email -> ['Integrations', 'Email'])
+	$parts = explode( '\\', $class_name );
+
+	// Get the actual class name (last part)
+	$file_name = array_pop( $parts );
+	$file_name = strtolower( $file_name );
+	$file_name = str_replace( '_', '-', $file_name );
+
+	// Get the subdirectory path (remaining parts)
+	$subdir = '';
+	if ( ! empty( $parts ) ) {
+		$subdir = strtolower( implode( '/', $parts ) ) . '/';
+	}
 
 	// Check different locations
 	$paths = [
-		AGOODBUG_PLUGIN_DIR . 'includes/class-' . $class_name . '.php',
-		AGOODBUG_PLUGIN_DIR . 'includes/' . $class_name . '.php',
-		AGOODBUG_PLUGIN_DIR . 'admin/class-' . $class_name . '.php',
-		AGOODBUG_PLUGIN_DIR . 'public/class-' . $class_name . '.php',
+		AGOODBUG_PLUGIN_DIR . 'includes/' . $subdir . 'class-' . $file_name . '.php',
+		AGOODBUG_PLUGIN_DIR . 'includes/' . $subdir . $file_name . '.php',
+		AGOODBUG_PLUGIN_DIR . 'admin/' . $subdir . 'class-' . $file_name . '.php',
+		AGOODBUG_PLUGIN_DIR . 'public/' . $subdir . 'class-' . $file_name . '.php',
 	];
 
 	foreach ( $paths as $path ) {
