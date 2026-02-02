@@ -31,8 +31,10 @@ class Checkvist {
 		$api_key  = $settings['checkvist_api_key'] ?? '';
 		$list_id  = $settings['checkvist_list_id'] ?? '';
 
+		error_log( 'AGoodBug - Checkvist: Starting send. Username: ' . ( $username ? 'set' : 'empty' ) . ', API key: ' . ( $api_key ? 'set' : 'empty' ) . ', List ID: ' . $list_id );
+
 		if ( empty( $username ) || empty( $api_key ) || empty( $list_id ) ) {
-			error_log( 'AGoodBug - Checkvist: Missing credentials (username, api_key, or list_id)' );
+			error_log( 'AGoodBug - Checkvist: Missing credentials' );
 			return false;
 		}
 
@@ -41,84 +43,56 @@ class Checkvist {
 		// Build task content: user's comment with ^today for due date
 		$task_content = $data['comment'] . ' ^today';
 
-		// Get screenshot data for attachment
-		$screenshot_data = $data['screenshot'] ?? '';
-		$has_screenshot  = ! empty( $screenshot_data ) && strpos( $screenshot_data, 'data:image/' ) === 0;
-
-		// Use import endpoint to create task with attachment
+		// Use simple tasks endpoint
 		$api_url = add_query_arg(
 			[
 				'username' => $username,
 				'api_key'  => $api_key,
 			],
-			self::API_URL . $list_id . '/import.json'
+			self::API_URL . $list_id . '/tasks.json'
 		);
 
-		// Build multipart body
-		$boundary = wp_generate_uuid4();
-		$body     = '';
+		error_log( 'AGoodBug - Checkvist: Calling API URL: ' . preg_replace( '/api_key=[^&]+/', 'api_key=***', $api_url ) );
 
-		// Add import_content (the task text)
-		$body .= '--' . $boundary . "\r\n";
-		$body .= 'Content-Disposition: form-data; name="import_content"' . "\r\n\r\n";
-		$body .= $task_content . "\r\n";
-
-		// Add parse_tasks to enable smart syntax (^today)
-		$body .= '--' . $boundary . "\r\n";
-		$body .= 'Content-Disposition: form-data; name="parse_tasks"' . "\r\n\r\n";
-		$body .= '1' . "\r\n";
-
-		// Add screenshot as attachment if available
-		if ( $has_screenshot ) {
-			// Extract mime type and decode base64
-			preg_match( '/^data:image\/(\w+);base64,/', $screenshot_data, $matches );
-			$extension  = $matches[1] ?? 'png';
-			$image_data = base64_decode( preg_replace( '/^data:image\/\w+;base64,/', '', $screenshot_data ) );
-
-			if ( $image_data ) {
-				$body .= '--' . $boundary . "\r\n";
-				$body .= 'Content-Disposition: form-data; name="add_files[1]"; filename="screenshot.' . $extension . '"' . "\r\n";
-				$body .= 'Content-Type: image/' . $extension . "\r\n\r\n";
-				$body .= $image_data . "\r\n";
-			}
-		}
-
-		$body .= '--' . $boundary . '--';
-
-		// Create task via import
+		// Create task
 		$response = wp_remote_post( $api_url, [
 			'headers' => [
-				'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+				'Content-Type' => 'application/json',
 			],
-			'body'    => $body,
-			'timeout' => 60,
+			'body'    => wp_json_encode( [
+				'task' => [
+					'content'  => $task_content,
+					'due_date' => 'today',
+				],
+			] ),
+			'timeout' => 30,
 		] );
 
 		if ( is_wp_error( $response ) ) {
-			error_log( 'AGoodBug - Checkvist error: ' . $response->get_error_message() );
+			error_log( 'AGoodBug - Checkvist WP error: ' . $response->get_error_message() );
 			return false;
 		}
 
 		$code         = wp_remote_retrieve_response_code( $response );
 		$body_content = wp_remote_retrieve_body( $response );
-		$result       = json_decode( $body_content, true );
 
-		// Import returns array of created tasks
-		if ( $code >= 200 && $code < 300 && ! empty( $result ) && is_array( $result ) ) {
-			// Get the first created task
-			$task = is_array( $result[0] ?? null ) ? $result[0] : $result;
-			$task_id = (string) ( $task['id'] ?? '' );
+		error_log( 'AGoodBug - Checkvist response code: ' . $code );
+		error_log( 'AGoodBug - Checkvist response body: ' . substr( $body_content, 0, 500 ) );
 
-			if ( $task_id ) {
-				// Add note with metadata
-				$note = $this->build_note( $data, $user );
-				$this->add_comment( $list_id, $task_id, $note, $username, $api_key );
+		$result = json_decode( $body_content, true );
 
-				return $task_id;
-			}
+		if ( $code >= 200 && $code < 300 && ! empty( $result['id'] ) ) {
+			$task_id = (string) $result['id'];
+			error_log( 'AGoodBug - Checkvist: Task created with ID: ' . $task_id );
+
+			// Add note with metadata and screenshot URL
+			$note = $this->build_note( $data, $user, $screenshot_url );
+			$this->add_comment( $list_id, $task_id, $note, $username, $api_key );
+
+			return $task_id;
 		}
 
-		error_log( 'AGoodBug - Checkvist error (code ' . $code . '): ' . $body_content );
+		error_log( 'AGoodBug - Checkvist: Failed to create task. Code: ' . $code . ', Body: ' . $body_content );
 		return false;
 	}
 
@@ -158,17 +132,21 @@ class Checkvist {
 			return false;
 		}
 
-		return true;
+		$code = wp_remote_retrieve_response_code( $response );
+		error_log( 'AGoodBug - Checkvist comment response code: ' . $code );
+
+		return $code >= 200 && $code < 300;
 	}
 
 	/**
 	 * Build note with metadata
 	 *
-	 * @param array    $data Feedback data.
-	 * @param \WP_User $user User object.
+	 * @param array    $data           Feedback data.
+	 * @param \WP_User $user           User object.
+	 * @param string   $screenshot_url Screenshot URL.
 	 * @return string
 	 */
-	private function build_note( $data, $user ) {
+	private function build_note( $data, $user, $screenshot_url ) {
 		$lines = [];
 
 		$lines[] = 'URL: ' . $data['url'];
@@ -191,6 +169,12 @@ class Checkvist {
 			$reporter,
 			$datetime
 		);
+
+		// Add screenshot URL if available
+		if ( $screenshot_url ) {
+			$lines[] = '';
+			$lines[] = __( 'Screenshot:', 'agoodbug' ) . ' ' . $screenshot_url;
+		}
 
 		return implode( "\n", $lines );
 	}
