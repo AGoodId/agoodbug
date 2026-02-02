@@ -1,0 +1,136 @@
+<?php
+/**
+ * Email Integration
+ *
+ * @package AGoodBug
+ */
+
+namespace AGoodBug\Integrations;
+
+use AGoodBug\Plugin;
+
+class Email {
+
+	/**
+	 * Send feedback via email
+	 *
+	 * @param array  $data           Feedback data.
+	 * @param string $screenshot_url Screenshot URL.
+	 * @param int    $post_id        Post ID.
+	 * @return bool
+	 */
+	public function send( $data, $screenshot_url, $post_id ) {
+		$settings   = Plugin::get_settings();
+		$recipients = $settings['email_recipients'] ?? get_option( 'admin_email' );
+
+		if ( empty( $recipients ) ) {
+			return false;
+		}
+
+		$user    = wp_get_current_user();
+		$subject = sprintf(
+			/* translators: %s: site name */
+			__( '[%s] New Bug Report', 'agoodbug' ),
+			get_bloginfo( 'name' )
+		);
+
+		$body = $this->build_email_body( $data, $screenshot_url, $user, $post_id );
+
+		$headers = [
+			'Content-Type: text/html; charset=UTF-8',
+			sprintf( 'From: %s <%s>', get_bloginfo( 'name' ), get_option( 'admin_email' ) ),
+			sprintf( 'Reply-To: %s <%s>', $user->display_name, $user->user_email ),
+		];
+
+		return wp_mail( $recipients, $subject, $body, $headers );
+	}
+
+	/**
+	 * Build HTML email body
+	 *
+	 * @param array    $data           Feedback data.
+	 * @param string   $screenshot_url Screenshot URL.
+	 * @param \WP_User $user           User object.
+	 * @param int      $post_id        Post ID.
+	 * @return string
+	 */
+	private function build_email_body( $data, $screenshot_url, $user, $post_id ) {
+		$edit_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
+
+		ob_start();
+		?>
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="UTF-8">
+			<style>
+				body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+				.container { max-width: 600px; margin: 0 auto; padding: 20px; }
+				.header { background: #1d2327; color: #fff; padding: 20px; border-radius: 8px 8px 0 0; }
+				.header h1 { margin: 0; font-size: 20px; }
+				.content { background: #fff; border: 1px solid #ddd; border-top: none; padding: 20px; border-radius: 0 0 8px 8px; }
+				.meta { background: #f5f5f5; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+				.meta-row { display: flex; margin-bottom: 8px; }
+				.meta-label { font-weight: 600; width: 100px; color: #666; }
+				.meta-value { flex: 1; }
+				.comment { background: #fffbea; border-left: 4px solid #f0b429; padding: 15px; margin: 20px 0; }
+				.screenshot { margin: 20px 0; }
+				.screenshot img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 6px; }
+				.button { display: inline-block; background: #2271b1; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
+				.footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; }
+			</style>
+		</head>
+		<body>
+			<div class="container">
+				<div class="header">
+					<h1>🐛 <?php esc_html_e( 'New Bug Report', 'agoodbug' ); ?></h1>
+				</div>
+				<div class="content">
+					<div class="meta">
+						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'From:', 'agoodbug' ); ?></span>
+							<span class="meta-value"><?php echo esc_html( $user->display_name ); ?> (<?php echo esc_html( $user->user_email ); ?>)</span>
+						</div>
+						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'Page:', 'agoodbug' ); ?></span>
+							<span class="meta-value"><a href="<?php echo esc_url( $data['url'] ); ?>"><?php echo esc_html( $data['url'] ); ?></a></span>
+						</div>
+						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'Viewport:', 'agoodbug' ); ?></span>
+							<span class="meta-value"><?php echo esc_html( $data['viewport'] ?? 'N/A' ); ?></span>
+						</div>
+						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'Browser:', 'agoodbug' ); ?></span>
+							<span class="meta-value"><?php echo esc_html( $data['browser'] ?? 'N/A' ); ?></span>
+						</div>
+					</div>
+
+					<div class="comment">
+						<strong><?php esc_html_e( 'Description:', 'agoodbug' ); ?></strong>
+						<p><?php echo nl2br( esc_html( $data['comment'] ) ); ?></p>
+					</div>
+
+					<?php if ( $screenshot_url ) : ?>
+						<div class="screenshot">
+							<strong><?php esc_html_e( 'Screenshot:', 'agoodbug' ); ?></strong>
+							<p><a href="<?php echo esc_url( $screenshot_url ); ?>"><img src="<?php echo esc_url( $screenshot_url ); ?>" alt="Screenshot" /></a></p>
+						</div>
+					<?php endif; ?>
+
+					<p>
+						<a href="<?php echo esc_url( $edit_url ); ?>" class="button">
+							<?php esc_html_e( 'View in WordPress', 'agoodbug' ); ?>
+						</a>
+					</p>
+
+					<div class="footer">
+						<p><?php esc_html_e( 'This email was sent by AGoodBug feedback widget.', 'agoodbug' ); ?></p>
+					</div>
+				</div>
+			</div>
+		</body>
+		</html>
+		<?php
+		return ob_get_clean();
+	}
+}
