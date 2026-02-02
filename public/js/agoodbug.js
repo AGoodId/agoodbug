@@ -90,16 +90,16 @@
 							<img src="" alt="Screenshot preview" />
 						</div>
 						<div class="agoodbug-modal__form">
+							<div class="agoodbug-modal__field">
+								<label for="agoodbug-comment">${strings.commentLabel}</label>
+								<textarea id="agoodbug-comment" placeholder="${strings.commentPlaceholder}" rows="4"></textarea>
+							</div>
 							${showEmailField ? `
 							<div class="agoodbug-modal__field">
 								<label for="agoodbug-email">${strings.emailLabel}</label>
 								<input type="email" id="agoodbug-email" placeholder="${strings.emailPlaceholder}" />
 							</div>
 							` : ''}
-							<div class="agoodbug-modal__field">
-								<label for="agoodbug-comment">${strings.commentLabel}</label>
-								<textarea id="agoodbug-comment" placeholder="${strings.commentPlaceholder}" rows="4"></textarea>
-							</div>
 						</div>
 					</div>
 					<div class="agoodbug-modal__footer">
@@ -359,12 +359,8 @@
 			this.modal.classList.add('is-open');
 			this.showForm();
 
-			// Focus email field if shown, otherwise comment field
-			if (this.emailField && !this.emailField.value) {
-				this.emailField.focus();
-			} else {
-				this.commentField.focus();
-			}
+			// Focus comment field first (email is below)
+			this.commentField.focus();
 			document.body.style.overflow = 'hidden';
 		}
 
