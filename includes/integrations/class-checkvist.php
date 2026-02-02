@@ -38,33 +38,60 @@ class Checkvist {
 
 		$user = wp_get_current_user();
 
-		// Build task content
-		$content = sprintf(
-			/* translators: %s: page path */
-			__( 'Bug Report: %s', 'agoodbug' ),
-			wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/'
-		);
+		// Build task content: user's comment with ^today for due date
+		$task_content = $data['comment'] . ' ^today';
 
-		// Build API URL with authentication via query parameters
+		// Get screenshot data for attachment
+		$screenshot_data = $data['screenshot'] ?? '';
+		$has_screenshot  = ! empty( $screenshot_data ) && strpos( $screenshot_data, 'data:image/' ) === 0;
+
+		// Use import endpoint to create task with attachment
 		$api_url = add_query_arg(
 			[
 				'username' => $username,
 				'api_key'  => $api_key,
 			],
-			self::API_URL . $list_id . '/tasks.json'
+			self::API_URL . $list_id . '/import.json'
 		);
 
-		// Create task
+		// Build multipart body
+		$boundary = wp_generate_uuid4();
+		$body     = '';
+
+		// Add import_content (the task text)
+		$body .= '--' . $boundary . "\r\n";
+		$body .= 'Content-Disposition: form-data; name="import_content"' . "\r\n\r\n";
+		$body .= $task_content . "\r\n";
+
+		// Add parse_tasks to enable smart syntax (^today)
+		$body .= '--' . $boundary . "\r\n";
+		$body .= 'Content-Disposition: form-data; name="parse_tasks"' . "\r\n\r\n";
+		$body .= '1' . "\r\n";
+
+		// Add screenshot as attachment if available
+		if ( $has_screenshot ) {
+			// Extract mime type and decode base64
+			preg_match( '/^data:image\/(\w+);base64,/', $screenshot_data, $matches );
+			$extension  = $matches[1] ?? 'png';
+			$image_data = base64_decode( preg_replace( '/^data:image\/\w+;base64,/', '', $screenshot_data ) );
+
+			if ( $image_data ) {
+				$body .= '--' . $boundary . "\r\n";
+				$body .= 'Content-Disposition: form-data; name="add_files[1]"; filename="screenshot.' . $extension . '"' . "\r\n";
+				$body .= 'Content-Type: image/' . $extension . "\r\n\r\n";
+				$body .= $image_data . "\r\n";
+			}
+		}
+
+		$body .= '--' . $boundary . '--';
+
+		// Create task via import
 		$response = wp_remote_post( $api_url, [
 			'headers' => [
-				'Content-Type' => 'application/json',
+				'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
 			],
-			'body'    => wp_json_encode( [
-				'task' => [
-					'content' => $content,
-				],
-			] ),
-			'timeout' => 30,
+			'body'    => $body,
+			'timeout' => 60,
 		] );
 
 		if ( is_wp_error( $response ) ) {
@@ -72,25 +99,31 @@ class Checkvist {
 			return false;
 		}
 
-		$code = wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$code         = wp_remote_retrieve_response_code( $response );
+		$body_content = wp_remote_retrieve_body( $response );
+		$result       = json_decode( $body_content, true );
 
-		if ( $code >= 200 && $code < 300 && ! empty( $body['id'] ) ) {
-			$task_id = (string) $body['id'];
+		// Import returns array of created tasks
+		if ( $code >= 200 && $code < 300 && ! empty( $result ) && is_array( $result ) ) {
+			// Get the first created task
+			$task = is_array( $result[0] ?? null ) ? $result[0] : $result;
+			$task_id = (string) ( $task['id'] ?? '' );
 
-			// Add notes as a comment
-			$notes = $this->build_notes( $data, $screenshot_url, $user );
-			$this->add_comment( $list_id, $task_id, $notes, $username, $api_key );
+			if ( $task_id ) {
+				// Add note with metadata
+				$note = $this->build_note( $data, $user );
+				$this->add_comment( $list_id, $task_id, $note, $username, $api_key );
 
-			return $task_id;
+				return $task_id;
+			}
 		}
 
-		error_log( 'AGoodBug - Checkvist error (code ' . $code . '): ' . wp_json_encode( $body ) );
+		error_log( 'AGoodBug - Checkvist error (code ' . $code . '): ' . $body_content );
 		return false;
 	}
 
 	/**
-	 * Add a comment to a task
+	 * Add a comment/note to a task
 	 *
 	 * @param string $list_id  List ID.
 	 * @param string $task_id  Task ID.
@@ -129,38 +162,35 @@ class Checkvist {
 	}
 
 	/**
-	 * Build task notes
+	 * Build note with metadata
 	 *
-	 * @param array    $data           Feedback data.
-	 * @param string   $screenshot_url Screenshot URL.
-	 * @param \WP_User $user           User object.
+	 * @param array    $data Feedback data.
+	 * @param \WP_User $user User object.
 	 * @return string
 	 */
-	private function build_notes( $data, $screenshot_url, $user ) {
+	private function build_note( $data, $user ) {
 		$lines = [];
 
-		$lines[] = '**' . __( 'Description', 'agoodbug' ) . ':**';
-		$lines[] = $data['comment'];
-		$lines[] = '';
-		$lines[] = '**' . __( 'Details', 'agoodbug' ) . ':**';
-		$lines[] = '- URL: ' . $data['url'];
-		$lines[] = '- Viewport: ' . ( $data['viewport'] ?? 'N/A' );
-		$lines[] = '- Browser: ' . ( $data['browser'] ?? 'N/A' );
+		$lines[] = 'URL: ' . $data['url'];
 
-		// Handle reporter info for both logged-in and anonymous users
+		// Reporter info
+		$reporter = '';
 		if ( $user->ID > 0 ) {
-			$lines[] = '- Reporter: ' . $user->display_name . ' (' . $user->user_email . ')';
+			$reporter = $user->display_name . ' (' . $user->user_email . ')';
 		} elseif ( ! empty( $data['email'] ) ) {
-			$lines[] = '- Reporter: ' . $data['email'];
+			$reporter = $data['email'];
 		} else {
-			$lines[] = '- Reporter: ' . __( 'Anonymous', 'agoodbug' );
+			$reporter = __( 'Anonymous', 'agoodbug' );
 		}
 
-		if ( $screenshot_url ) {
-			$lines[] = '';
-			$lines[] = '**' . __( 'Screenshot', 'agoodbug' ) . ':**';
-			$lines[] = $screenshot_url;
-		}
+		// Format: "Skickat av user@email.com 2026-02-02 kl. 18.21"
+		$datetime = wp_date( 'Y-m-d' ) . ' kl. ' . wp_date( 'H.i' );
+		$lines[] = sprintf(
+			/* translators: 1: reporter name/email, 2: date and time */
+			__( 'Skickat av %1$s %2$s', 'agoodbug' ),
+			$reporter,
+			$datetime
+		);
 
 		return implode( "\n", $lines );
 	}
