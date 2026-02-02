@@ -62,11 +62,19 @@ class Frontend {
 
 		$settings = Plugin::get_settings();
 
+		// Get user email for pre-fill
+		$user_email = '';
+		if ( is_user_logged_in() ) {
+			$user       = wp_get_current_user();
+			$user_email = $user->user_email;
+		}
+
 		// Localize script
 		wp_localize_script( 'agoodbug', 'agoodbugConfig', [
-			'apiUrl'        => rest_url( 'agoodbug/v1/feedback' ),
-			'nonce'         => wp_create_nonce( 'wp_rest' ),
-			'isLoggedIn'    => is_user_logged_in(),
+			'apiUrl'         => rest_url( 'agoodbug/v1/feedback' ),
+			'nonce'          => wp_create_nonce( 'wp_rest' ),
+			'isLoggedIn'     => is_user_logged_in(),
+			'userEmail'      => $user_email,
 			'showEmailField' => ! is_user_logged_in() || ! empty( $settings['allow_anonymous'] ),
 			'strings'       => [
 				'buttonTitle'        => __( 'Report a bug', 'agoodbug' ),

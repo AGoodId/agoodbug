@@ -70,7 +70,7 @@
 
 		// Create modal
 		createModal() {
-			const showEmailField = config.showEmailField && !config.isLoggedIn;
+			const showEmailField = config.showEmailField;
 
 			this.modal = document.createElement('div');
 			this.modal.className = 'agoodbug-modal';
@@ -134,11 +134,15 @@
 			this.successPanel = this.modal.querySelector('.agoodbug-modal__success');
 			this.errorPanel = this.modal.querySelector('.agoodbug-modal__error');
 
-			// Load saved email from localStorage
+			// Pre-fill email: logged-in user email > localStorage > empty
 			if (this.emailField) {
-				const savedEmail = localStorage.getItem('agoodbug_email');
-				if (savedEmail) {
-					this.emailField.value = savedEmail;
+				if (config.userEmail) {
+					this.emailField.value = config.userEmail;
+				} else {
+					const savedEmail = localStorage.getItem('agoodbug_email');
+					if (savedEmail) {
+						this.emailField.value = savedEmail;
+					}
 				}
 			}
 		}

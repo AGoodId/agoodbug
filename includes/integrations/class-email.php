@@ -39,8 +39,21 @@ class Email {
 		$headers = [
 			'Content-Type: text/html; charset=UTF-8',
 			sprintf( 'From: %s <%s>', get_bloginfo( 'name' ), get_option( 'admin_email' ) ),
-			sprintf( 'Reply-To: %s <%s>', $user->display_name, $user->user_email ),
 		];
+
+		// Add Reply-To if we have reporter email
+		$reply_email = '';
+		$reply_name  = '';
+		if ( $user->ID > 0 ) {
+			$reply_email = $user->user_email;
+			$reply_name  = $user->display_name;
+		} elseif ( ! empty( $data['email'] ) ) {
+			$reply_email = sanitize_email( $data['email'] );
+			$reply_name  = $reply_email;
+		}
+		if ( $reply_email ) {
+			$headers[] = sprintf( 'Reply-To: %s <%s>', $reply_name, $reply_email );
+		}
 
 		return wp_mail( $recipients, $subject, $body, $headers );
 	}
@@ -89,7 +102,17 @@ class Email {
 					<div class="meta">
 						<div class="meta-row">
 							<span class="meta-label"><?php esc_html_e( 'From:', 'agoodbug' ); ?></span>
-							<span class="meta-value"><?php echo esc_html( $user->display_name ); ?> (<?php echo esc_html( $user->user_email ); ?>)</span>
+							<span class="meta-value">
+								<?php
+								if ( $user->ID > 0 ) {
+									echo esc_html( $user->display_name ) . ' (' . esc_html( $user->user_email ) . ')';
+								} elseif ( ! empty( $data['email'] ) ) {
+									echo esc_html( $data['email'] );
+								} else {
+									esc_html_e( 'Anonymous', 'agoodbug' );
+								}
+								?>
+							</span>
 						</div>
 						<div class="meta-row">
 							<span class="meta-label"><?php esc_html_e( 'Page:', 'agoodbug' ); ?></span>

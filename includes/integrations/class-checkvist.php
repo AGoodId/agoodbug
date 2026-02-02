@@ -94,7 +94,15 @@ class Checkvist {
 		$lines[] = '- URL: ' . $data['url'];
 		$lines[] = '- Viewport: ' . ( $data['viewport'] ?? 'N/A' );
 		$lines[] = '- Browser: ' . ( $data['browser'] ?? 'N/A' );
-		$lines[] = '- Reporter: ' . $user->display_name . ' (' . $user->user_email . ')';
+
+		// Handle reporter info for both logged-in and anonymous users
+		if ( $user->ID > 0 ) {
+			$lines[] = '- Reporter: ' . $user->display_name . ' (' . $user->user_email . ')';
+		} elseif ( ! empty( $data['email'] ) ) {
+			$lines[] = '- Reporter: ' . $data['email'];
+		} else {
+			$lines[] = '- Reporter: ' . __( 'Anonymous', 'agoodbug' );
+		}
 
 		if ( $screenshot_url ) {
 			$lines[] = '';
