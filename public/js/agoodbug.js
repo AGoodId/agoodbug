@@ -89,22 +89,24 @@
 						<div class="agoodbug-modal__preview">
 							<img src="" alt="Screenshot preview" />
 						</div>
-						<div class="agoodbug-modal__form">
-							<div class="agoodbug-modal__field">
-								<label for="agoodbug-comment">${strings.commentLabel}</label>
-								<textarea id="agoodbug-comment" placeholder="${strings.commentPlaceholder}" rows="4"></textarea>
+						<div class="agoodbug-modal__sidebar">
+							<div class="agoodbug-modal__form">
+								<div class="agoodbug-modal__field">
+									<label for="agoodbug-comment">${strings.commentLabel}</label>
+									<textarea id="agoodbug-comment" placeholder="${strings.commentPlaceholder}" rows="3"></textarea>
+								</div>
+								${showEmailField ? `
+								<div class="agoodbug-modal__field">
+									<label for="agoodbug-email">${strings.emailLabel}</label>
+									<input type="email" id="agoodbug-email" placeholder="${strings.emailPlaceholder}" />
+								</div>
+								` : ''}
 							</div>
-							${showEmailField ? `
-							<div class="agoodbug-modal__field">
-								<label for="agoodbug-email">${strings.emailLabel}</label>
-								<input type="email" id="agoodbug-email" placeholder="${strings.emailPlaceholder}" />
+							<div class="agoodbug-modal__actions">
+								<button type="button" class="agoodbug-modal__cancel">${strings.cancelButton}</button>
+								<button type="button" class="agoodbug-modal__submit">${strings.submitButton}</button>
 							</div>
-							` : ''}
 						</div>
-					</div>
-					<div class="agoodbug-modal__footer">
-						<button type="button" class="agoodbug-modal__cancel">${strings.cancelButton}</button>
-						<button type="button" class="agoodbug-modal__submit">${strings.submitButton}</button>
 					</div>
 					<div class="agoodbug-modal__success" hidden>
 						<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -372,21 +374,21 @@
 
 		showForm() {
 			this.modal.querySelector('.agoodbug-modal__body').hidden = false;
-			this.modal.querySelector('.agoodbug-modal__footer').hidden = false;
+			this.modal.querySelector('.agoodbug-modal__actions').hidden = false;
 			this.successPanel.hidden = true;
 			this.errorPanel.hidden = true;
 		}
 
 		showSuccess() {
 			this.modal.querySelector('.agoodbug-modal__body').hidden = true;
-			this.modal.querySelector('.agoodbug-modal__footer').hidden = true;
+			this.modal.querySelector('.agoodbug-modal__actions').hidden = true;
 			this.successPanel.hidden = false;
 			this.errorPanel.hidden = true;
 		}
 
 		showError() {
 			this.modal.querySelector('.agoodbug-modal__body').hidden = true;
-			this.modal.querySelector('.agoodbug-modal__footer').hidden = true;
+			this.modal.querySelector('.agoodbug-modal__actions').hidden = true;
 			this.successPanel.hidden = true;
 			this.errorPanel.hidden = false;
 		}
