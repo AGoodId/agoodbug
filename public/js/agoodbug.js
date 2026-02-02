@@ -70,6 +70,8 @@
 
 		// Create modal
 		createModal() {
+			const showEmailField = config.showEmailField && !config.isLoggedIn;
+
 			this.modal = document.createElement('div');
 			this.modal.className = 'agoodbug-modal';
 			this.modal.innerHTML = `
@@ -88,8 +90,16 @@
 							<img src="" alt="Screenshot preview" />
 						</div>
 						<div class="agoodbug-modal__form">
-							<label for="agoodbug-comment">${strings.commentLabel}</label>
-							<textarea id="agoodbug-comment" placeholder="${strings.commentPlaceholder}" rows="4"></textarea>
+							${showEmailField ? `
+							<div class="agoodbug-modal__field">
+								<label for="agoodbug-email">${strings.emailLabel}</label>
+								<input type="email" id="agoodbug-email" placeholder="${strings.emailPlaceholder}" />
+							</div>
+							` : ''}
+							<div class="agoodbug-modal__field">
+								<label for="agoodbug-comment">${strings.commentLabel}</label>
+								<textarea id="agoodbug-comment" placeholder="${strings.commentPlaceholder}" rows="4"></textarea>
+							</div>
 						</div>
 					</div>
 					<div class="agoodbug-modal__footer">
@@ -118,10 +128,19 @@
 			this.container.appendChild(this.modal);
 
 			this.previewImg = this.modal.querySelector('.agoodbug-modal__preview img');
+			this.emailField = this.modal.querySelector('#agoodbug-email');
 			this.commentField = this.modal.querySelector('#agoodbug-comment');
 			this.submitBtn = this.modal.querySelector('.agoodbug-modal__submit');
 			this.successPanel = this.modal.querySelector('.agoodbug-modal__success');
 			this.errorPanel = this.modal.querySelector('.agoodbug-modal__error');
+
+			// Load saved email from localStorage
+			if (this.emailField) {
+				const savedEmail = localStorage.getItem('agoodbug_email');
+				if (savedEmail) {
+					this.emailField.value = savedEmail;
+				}
+			}
 		}
 
 		// Bind events
@@ -335,7 +354,13 @@
 			this.commentField.value = '';
 			this.modal.classList.add('is-open');
 			this.showForm();
-			this.commentField.focus();
+
+			// Focus email field if shown, otherwise comment field
+			if (this.emailField && !this.emailField.value) {
+				this.emailField.focus();
+			} else {
+				this.commentField.focus();
+			}
 			document.body.style.overflow = 'hidden';
 		}
 
@@ -369,6 +394,14 @@
 		// Submit feedback
 		async submitFeedback() {
 			const comment = this.commentField.value.trim();
+			const email = this.emailField ? this.emailField.value.trim() : '';
+
+			// Validate email if field is shown
+			if (this.emailField && !email) {
+				this.emailField.focus();
+				this.emailField.classList.add('is-error');
+				return;
+			}
 
 			if (!comment) {
 				this.commentField.focus();
@@ -376,15 +409,24 @@
 				return;
 			}
 
+			if (this.emailField) {
+				this.emailField.classList.remove('is-error');
+			}
 			this.commentField.classList.remove('is-error');
 			this.submitBtn.disabled = true;
 			this.submitBtn.textContent = strings.sending;
+
+			// Save email to localStorage for next time
+			if (email) {
+				localStorage.setItem('agoodbug_email', email);
+			}
 
 			const data = {
 				screenshot: this.screenshot,
 				url: window.location.href,
 				comment: comment,
-				selection: this.selection,
+				email: email,
+				selection: JSON.stringify(this.selection),
 				viewport: `${window.innerWidth}x${window.innerHeight}`,
 				browser: this.getBrowserInfo()
 			};

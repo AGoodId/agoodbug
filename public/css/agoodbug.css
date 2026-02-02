@@ -202,12 +202,41 @@
 	height: auto;
 }
 
+.agoodbug-modal__field {
+	margin-bottom: 16px;
+}
+
+.agoodbug-modal__field:last-child {
+	margin-bottom: 0;
+}
+
 .agoodbug-modal__form label {
 	display: block;
 	margin-bottom: 8px;
 	font-size: 14px;
 	font-weight: 500;
 	color: var(--agoodbug-text);
+}
+
+.agoodbug-modal__form input[type="email"] {
+	width: 100%;
+	padding: 12px;
+	border: 1px solid var(--agoodbug-border);
+	border-radius: 6px;
+	font-size: 14px;
+	font-family: inherit;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.agoodbug-modal__form input[type="email"]:focus {
+	outline: none;
+	border-color: var(--agoodbug-primary);
+	box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+}
+
+.agoodbug-modal__form input[type="email"].is-error {
+	border-color: var(--agoodbug-error);
+	animation: agoodbug-shake 0.4s ease;
 }
 
 .agoodbug-modal__form textarea {

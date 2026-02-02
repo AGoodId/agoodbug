@@ -56,6 +56,18 @@ class Settings {
 		);
 
 		add_settings_field(
+			'allow_anonymous',
+			__( 'Allow Anonymous', 'agoodbug' ),
+			[ $this, 'render_checkbox_field' ],
+			'agoodbug',
+			'agoodbug_general',
+			[
+				'name'        => 'allow_anonymous',
+				'description' => __( 'Allow non-logged-in visitors to submit feedback (email field will be shown).', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
 			'roles',
 			__( 'Allowed Roles', 'agoodbug' ),
 			[ $this, 'render_roles_field' ],
@@ -229,6 +241,7 @@ class Settings {
 	public function get_defaults() {
 		return [
 			'enabled'            => true,
+			'allow_anonymous'    => false,
 			'roles'              => [ 'administrator', 'editor' ],
 			'destinations'       => [ 'cpt', 'email' ],
 			'email_recipients'   => get_option( 'admin_email' ),
@@ -257,6 +270,7 @@ class Settings {
 		$defaults  = $this->get_defaults();
 
 		$sanitized['enabled']          = ! empty( $input['enabled'] );
+		$sanitized['allow_anonymous']  = ! empty( $input['allow_anonymous'] );
 		$sanitized['roles']            = isset( $input['roles'] ) && is_array( $input['roles'] )
 			? array_map( 'sanitize_text_field', $input['roles'] )
 			: $defaults['roles'];

@@ -38,7 +38,6 @@ class REST_API {
 				'screenshot' => [
 					'type'              => 'string',
 					'required'          => true,
-					'sanitize_callback' => 'sanitize_text_field',
 				],
 				'url' => [
 					'type'              => 'string',
@@ -50,10 +49,14 @@ class REST_API {
 					'required'          => true,
 					'sanitize_callback' => 'sanitize_textarea_field',
 				],
+				'email' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_email',
+				],
 				'selection' => [
-					'type'     => 'object',
+					'type'     => 'string',
 					'required' => false,
-					'default'  => [],
 				],
 				'viewport' => [
 					'type'              => 'string',
@@ -81,6 +84,12 @@ class REST_API {
 	 * @return bool|\WP_Error
 	 */
 	public function check_permissions() {
+		// Check if anonymous users are allowed
+		$settings = Plugin::get_settings();
+		if ( ! empty( $settings['allow_anonymous'] ) ) {
+			return true;
+		}
+
 		if ( ! Plugin::user_can_report() ) {
 			return new \WP_Error(
 				'rest_forbidden',
@@ -143,6 +152,7 @@ class REST_API {
 			'screenshot' => $request->get_param( 'screenshot' ),
 			'url'        => $request->get_param( 'url' ),
 			'comment'    => $request->get_param( 'comment' ),
+			'email'      => $request->get_param( 'email' ),
 			'selection'  => $request->get_param( 'selection' ),
 			'viewport'   => $request->get_param( 'viewport' ),
 			'browser'    => $request->get_param( 'browser' ),

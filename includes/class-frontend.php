@@ -18,10 +18,27 @@ class Frontend {
 	}
 
 	/**
+	 * Check if widget should be shown
+	 *
+	 * @return bool
+	 */
+	private function should_show_widget() {
+		$settings = Plugin::get_settings();
+
+		// Check if anonymous users are allowed
+		if ( ! empty( $settings['allow_anonymous'] ) ) {
+			return true;
+		}
+
+		// Otherwise check logged-in user permissions
+		return Plugin::user_can_report();
+	}
+
+	/**
 	 * Enqueue frontend assets
 	 */
 	public function enqueue_assets() {
-		if ( ! Plugin::user_can_report() ) {
+		if ( ! $this->should_show_widget() ) {
 			return;
 		}
 
@@ -43,23 +60,29 @@ class Frontend {
 			true
 		);
 
+		$settings = Plugin::get_settings();
+
 		// Localize script
 		wp_localize_script( 'agoodbug', 'agoodbugConfig', [
-			'apiUrl'   => rest_url( 'agoodbug/v1/feedback' ),
-			'nonce'    => wp_create_nonce( 'wp_rest' ),
-			'strings'  => [
-				'buttonTitle'      => __( 'Report a bug', 'agoodbug' ),
-				'overlayHint'      => __( 'Click and drag to select an area', 'agoodbug' ),
-				'modalTitle'       => __( 'Report a Bug', 'agoodbug' ),
-				'commentLabel'     => __( 'Describe the problem', 'agoodbug' ),
+			'apiUrl'        => rest_url( 'agoodbug/v1/feedback' ),
+			'nonce'         => wp_create_nonce( 'wp_rest' ),
+			'isLoggedIn'    => is_user_logged_in(),
+			'showEmailField' => ! is_user_logged_in() || ! empty( $settings['allow_anonymous'] ),
+			'strings'       => [
+				'buttonTitle'        => __( 'Report a bug', 'agoodbug' ),
+				'overlayHint'        => __( 'Click and drag to select an area', 'agoodbug' ),
+				'modalTitle'         => __( 'Report a Bug', 'agoodbug' ),
+				'emailLabel'         => __( 'Your email', 'agoodbug' ),
+				'emailPlaceholder'   => __( 'your@email.com', 'agoodbug' ),
+				'commentLabel'       => __( 'Describe the problem', 'agoodbug' ),
 				'commentPlaceholder' => __( 'What went wrong? What did you expect to happen?', 'agoodbug' ),
-				'submitButton'     => __( 'Send Report', 'agoodbug' ),
-				'cancelButton'     => __( 'Cancel', 'agoodbug' ),
-				'sending'          => __( 'Sending...', 'agoodbug' ),
-				'success'          => __( 'Thank you! Your feedback has been received.', 'agoodbug' ),
-				'error'            => __( 'Something went wrong. Please try again.', 'agoodbug' ),
-				'retryButton'      => __( 'Try Again', 'agoodbug' ),
-				'closeButton'      => __( 'Close', 'agoodbug' ),
+				'submitButton'       => __( 'Send Report', 'agoodbug' ),
+				'cancelButton'       => __( 'Cancel', 'agoodbug' ),
+				'sending'            => __( 'Sending...', 'agoodbug' ),
+				'success'            => __( 'Thank you! Your feedback has been received.', 'agoodbug' ),
+				'error'              => __( 'Something went wrong. Please try again.', 'agoodbug' ),
+				'retryButton'        => __( 'Try Again', 'agoodbug' ),
+				'closeButton'        => __( 'Close', 'agoodbug' ),
 			],
 		] );
 
@@ -76,7 +99,7 @@ class Frontend {
 	 * Render the widget container
 	 */
 	public function render_widget() {
-		if ( ! Plugin::user_can_report() ) {
+		if ( ! $this->should_show_widget() ) {
 			return;
 		}
 

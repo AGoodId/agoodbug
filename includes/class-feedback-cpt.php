@@ -260,6 +260,12 @@ class Feedback_CPT {
 	 */
 	public static function create_feedback( $data ) {
 		$user = wp_get_current_user();
+		$is_logged_in = is_user_logged_in();
+
+		// Determine reporter info
+		$reporter_name  = $is_logged_in ? $user->display_name : __( 'Anonymous', 'agoodbug' );
+		$reporter_email = $is_logged_in ? $user->user_email : sanitize_email( $data['email'] ?? '' );
+		$reporter_id    = $is_logged_in ? $user->ID : 0;
 
 		$post_data = [
 			'post_type'    => self::POST_TYPE,
@@ -271,7 +277,7 @@ class Feedback_CPT {
 				wp_date( 'Y-m-d H:i' )
 			),
 			'post_content' => sanitize_textarea_field( $data['comment'] ?? '' ),
-			'post_author'  => $user->ID,
+			'post_author'  => $reporter_id ?: 1, // Use admin if anonymous
 		];
 
 		$post_id = wp_insert_post( $post_data, true );
@@ -284,10 +290,10 @@ class Feedback_CPT {
 		update_post_meta( $post_id, '_page_url', esc_url_raw( $data['url'] ) );
 		update_post_meta( $post_id, '_viewport', sanitize_text_field( $data['viewport'] ?? '' ) );
 		update_post_meta( $post_id, '_browser_info', sanitize_text_field( $data['browser'] ?? '' ) );
-		update_post_meta( $post_id, '_selection_coords', wp_json_encode( $data['selection'] ?? [] ) );
-		update_post_meta( $post_id, '_reporter_id', $user->ID );
-		update_post_meta( $post_id, '_reporter_name', $user->display_name );
-		update_post_meta( $post_id, '_reporter_email', $user->user_email );
+		update_post_meta( $post_id, '_selection_coords', sanitize_text_field( $data['selection'] ?? '' ) );
+		update_post_meta( $post_id, '_reporter_id', $reporter_id );
+		update_post_meta( $post_id, '_reporter_name', $reporter_name );
+		update_post_meta( $post_id, '_reporter_email', $reporter_email );
 
 		// Handle screenshot
 		if ( ! empty( $data['screenshot'] ) ) {
