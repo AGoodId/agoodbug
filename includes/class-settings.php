@@ -414,7 +414,7 @@ class Settings {
 		$sanitized['agoodmember_assignee_email'] = sanitize_email( $input['agoodmember_assignee_email'] ?? '' );
 
 		// Rate limit
-		$sanitized['rate_limit'] = absint( $input['rate_limit'] ?? $defaults['rate_limit'] )
+		$sanitized['rate_limit'] = absint( $input['rate_limit'] ?? $defaults['rate_limit'] );
 
 		return $sanitized;
 	}
