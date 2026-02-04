@@ -17,12 +17,14 @@
 			this.isCapturing = false;
 			this.selection = null;
 			this.screenshot = null;
+			this.feedbackMode = null; // 'general' or 'screenshot'
 
 			this.init();
 		}
 
 		init() {
 			this.createButton();
+			this.createChoicePanel();
 			this.createOverlay();
 			this.createModal();
 			this.bindEvents();
@@ -50,6 +52,76 @@
 				</svg>
 			`;
 			this.container.appendChild(this.button);
+		}
+
+		// Create choice panel (General feedback vs Screenshot)
+		createChoicePanel() {
+			this.choicePanel = document.createElement('div');
+			this.choicePanel.className = 'agoodbug-choice';
+			this.choicePanel.innerHTML = `
+				<div class="agoodbug-choice__backdrop"></div>
+				<div class="agoodbug-choice__content">
+					<div class="agoodbug-choice__header">
+						<h3>${strings.choiceTitle || 'How would you like to report?'}</h3>
+						<button type="button" class="agoodbug-choice__close" aria-label="${strings.closeButton}">
+							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M18 6L6 18M6 6l12 12"/>
+							</svg>
+						</button>
+					</div>
+					<div class="agoodbug-choice__options">
+						<button type="button" class="agoodbug-choice__option" data-mode="general">
+							<div class="agoodbug-choice__icon">
+								<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+								</svg>
+							</div>
+							<div class="agoodbug-choice__label">${strings.generalFeedback || 'General feedback'}</div>
+							<div class="agoodbug-choice__desc">${strings.generalFeedbackDesc || 'Write a comment without screenshot'}</div>
+						</button>
+						<button type="button" class="agoodbug-choice__option" data-mode="screenshot">
+							<div class="agoodbug-choice__icon">
+								<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+									<circle cx="8.5" cy="8.5" r="1.5"/>
+									<polyline points="21 15 16 10 5 21"/>
+								</svg>
+							</div>
+							<div class="agoodbug-choice__label">${strings.screenshotFeedback || 'Take a screenshot'}</div>
+							<div class="agoodbug-choice__desc">${strings.screenshotFeedbackDesc || 'Mark an area on the page'}</div>
+						</button>
+					</div>
+				</div>
+			`;
+			this.container.appendChild(this.choicePanel);
+		}
+
+		// Show choice panel
+		showChoicePanel() {
+			this.button.classList.add('is-hidden');
+			this.choicePanel.classList.add('is-open');
+		}
+
+		// Hide choice panel
+		hideChoicePanel() {
+			this.choicePanel.classList.remove('is-open');
+			this.button.classList.remove('is-hidden');
+		}
+
+		// Handle feedback mode selection
+		selectFeedbackMode(mode) {
+			this.feedbackMode = mode;
+			this.hideChoicePanel();
+
+			if (mode === 'general') {
+				// Open modal directly without screenshot
+				this.screenshot = null;
+				this.selection = null;
+				this.openModal();
+			} else if (mode === 'screenshot') {
+				// Start screenshot capture flow
+				this.startCapture();
+			}
 		}
 
 		// Create selection overlay
@@ -151,8 +223,18 @@
 
 		// Bind events
 		bindEvents() {
-			// Button click
-			this.button.addEventListener('click', () => this.startCapture());
+			// Button click - show choice panel
+			this.button.addEventListener('click', () => this.showChoicePanel());
+
+			// Choice panel events
+			this.choicePanel.querySelector('.agoodbug-choice__backdrop').addEventListener('click', () => this.hideChoicePanel());
+			this.choicePanel.querySelector('.agoodbug-choice__close').addEventListener('click', () => this.hideChoicePanel());
+			this.choicePanel.querySelectorAll('.agoodbug-choice__option').forEach(option => {
+				option.addEventListener('click', () => {
+					const mode = option.dataset.mode;
+					this.selectFeedbackMode(mode);
+				});
+			});
 
 			// Overlay events
 			this.overlay.addEventListener('mousedown', (e) => this.onMouseDown(e));
@@ -165,6 +247,7 @@
 			// Escape key
 			document.addEventListener('keydown', (e) => {
 				if (e.key === 'Escape') {
+					if (this.choicePanel.classList.contains('is-open')) this.hideChoicePanel();
 					if (this.isCapturing) this.cancelCapture();
 					if (this.modal.classList.contains('is-open')) this.closeModal();
 				}
@@ -356,7 +439,19 @@
 
 		// Modal handlers
 		openModal() {
-			this.previewImg.src = this.screenshot;
+			const previewContainer = this.modal.querySelector('.agoodbug-modal__preview');
+
+			if (this.screenshot) {
+				// Screenshot mode - show preview
+				this.previewImg.src = this.screenshot;
+				previewContainer.hidden = false;
+				this.modal.classList.remove('is-general-mode');
+			} else {
+				// General feedback mode - hide preview
+				previewContainer.hidden = true;
+				this.modal.classList.add('is-general-mode');
+			}
+
 			this.commentField.value = '';
 			this.modal.classList.add('is-open');
 			this.showForm();
@@ -423,14 +518,31 @@
 				localStorage.setItem('agoodbug_email', email);
 			}
 
+			const deviceInfo = this.getDeviceInfo();
 			const data = {
-				screenshot: this.screenshot,
+				feedback_type: this.feedbackMode || 'screenshot',
+				screenshot: this.screenshot || null,
 				url: window.location.href,
 				comment: comment,
 				email: email,
-				selection: JSON.stringify(this.selection),
+				selection: this.selection ? JSON.stringify(this.selection) : null,
 				viewport: `${window.innerWidth}x${window.innerHeight}`,
-				browser: this.getBrowserInfo()
+				browser: this.getBrowserInfo(),
+				// Extended device info
+				device_type: deviceInfo.deviceType,
+				screen_resolution: deviceInfo.screenResolution,
+				pixel_ratio: deviceInfo.pixelRatio,
+				color_depth: deviceInfo.colorDepth,
+				touch_enabled: deviceInfo.touchEnabled,
+				color_scheme: deviceInfo.colorScheme,
+				language: deviceInfo.language,
+				timezone: deviceInfo.timezone,
+				referrer: deviceInfo.referrer,
+				cookies_enabled: deviceInfo.cookiesEnabled,
+				connection: typeof deviceInfo.connection === 'object'
+					? JSON.stringify(deviceInfo.connection)
+					: deviceInfo.connection,
+				memory: deviceInfo.memory
 			};
 
 			try {
@@ -483,6 +595,75 @@
 			else if (ua.includes('Android')) os = 'Android';
 
 			return `${browser} / ${os}`;
+		}
+
+		// Get device type (mobile, tablet, desktop)
+		getDeviceType() {
+			const ua = navigator.userAgent;
+
+			// Check for mobile devices
+			if (/iPhone|iPod|Android.*Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+				return 'mobile';
+			}
+
+			// Check for tablets
+			if (/iPad|Android(?!.*Mobile)|Tablet/i.test(ua)) {
+				return 'tablet';
+			}
+
+			return 'desktop';
+		}
+
+		// Get extended device information
+		getDeviceInfo() {
+			return {
+				// Device type
+				deviceType: this.getDeviceType(),
+
+				// Screen info
+				screenResolution: `${window.screen.width}x${window.screen.height}`,
+				pixelRatio: window.devicePixelRatio || 1,
+				colorDepth: window.screen.colorDepth,
+
+				// Touch capability
+				touchEnabled: ('ontouchstart' in window) || (navigator.maxTouchPoints > 0),
+				maxTouchPoints: navigator.maxTouchPoints || 0,
+
+				// User preferences
+				colorScheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+				reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+
+				// Locale info
+				language: navigator.language || navigator.userLanguage || 'unknown',
+				languages: navigator.languages ? navigator.languages.join(', ') : navigator.language,
+				timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+
+				// Navigation
+				referrer: document.referrer || 'direct',
+
+				// Browser capabilities
+				cookiesEnabled: navigator.cookieEnabled,
+				doNotTrack: navigator.doNotTrack === '1' || navigator.doNotTrack === 'yes',
+
+				// Connection info (if available)
+				connection: this.getConnectionInfo(),
+
+				// Memory info (if available, Chrome only)
+				memory: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'unknown'
+			};
+		}
+
+		// Get connection info (Network Information API)
+		getConnectionInfo() {
+			const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+			if (!conn) return 'unknown';
+
+			return {
+				effectiveType: conn.effectiveType || 'unknown', // 4g, 3g, 2g, slow-2g
+				downlink: conn.downlink ? `${conn.downlink} Mbps` : 'unknown',
+				rtt: conn.rtt ? `${conn.rtt} ms` : 'unknown',
+				saveData: conn.saveData || false
+			};
 		}
 	}
 

@@ -97,8 +97,19 @@ class GitHub {
 		$lines[] = '| Key | Value |';
 		$lines[] = '|-----|-------|';
 		$lines[] = '| **URL** | ' . $data['url'] . ' |';
+		$lines[] = '| **Device** | ' . ucfirst( $data['device_type'] ?? 'unknown' ) . ( ! empty( $data['touch_enabled'] ) ? ' (touch)' : '' ) . ' |';
+		$lines[] = '| **Screen** | ' . ( $data['screen_resolution'] ?? 'N/A' ) . ( ! empty( $data['pixel_ratio'] ) && $data['pixel_ratio'] > 1 ? ' @' . $data['pixel_ratio'] . 'x' : '' ) . ' |';
 		$lines[] = '| **Viewport** | ' . ( $data['viewport'] ?? 'N/A' ) . ' |';
 		$lines[] = '| **Browser** | ' . ( $data['browser'] ?? 'N/A' ) . ' |';
+		if ( ! empty( $data['color_scheme'] ) ) {
+			$lines[] = '| **Color Scheme** | ' . ucfirst( $data['color_scheme'] ) . ' |';
+		}
+		if ( ! empty( $data['language'] ) ) {
+			$lines[] = '| **Language** | ' . $data['language'] . ' |';
+		}
+		if ( ! empty( $data['timezone'] ) ) {
+			$lines[] = '| **Timezone** | ' . $data['timezone'] . ' |';
+		}
 
 		// Handle reporter info for both logged-in and anonymous users
 		if ( $user->ID > 0 ) {

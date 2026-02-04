@@ -35,9 +35,15 @@ class REST_API {
 			'callback'            => [ $this, 'submit_feedback' ],
 			'permission_callback' => [ $this, 'check_permissions' ],
 			'args'                => [
+				'feedback_type' => [
+					'type'              => 'string',
+					'required'          => false,
+					'default'           => 'screenshot',
+					'sanitize_callback' => 'sanitize_text_field',
+				],
 				'screenshot' => [
 					'type'              => 'string',
-					'required'          => true,
+					'required'          => false, // Now optional for general feedback
 				],
 				'url' => [
 					'type'              => 'string',
@@ -64,6 +70,63 @@ class REST_API {
 					'sanitize_callback' => 'sanitize_text_field',
 				],
 				'browser' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				// Extended device info
+				'device_type' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				'screen_resolution' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				'pixel_ratio' => [
+					'type'              => 'number',
+					'required'          => false,
+				],
+				'color_depth' => [
+					'type'              => 'integer',
+					'required'          => false,
+				],
+				'touch_enabled' => [
+					'type'              => 'boolean',
+					'required'          => false,
+				],
+				'color_scheme' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				'language' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				'timezone' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				'referrer' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'esc_url_raw',
+				],
+				'cookies_enabled' => [
+					'type'              => 'boolean',
+					'required'          => false,
+				],
+				'connection' => [
+					'type'              => 'string',
+					'required'          => false,
+					'sanitize_callback' => 'sanitize_text_field',
+				],
+				'memory' => [
 					'type'              => 'string',
 					'required'          => false,
 					'sanitize_callback' => 'sanitize_text_field',
@@ -155,17 +218,31 @@ class REST_API {
 			}
 
 			$data = [
-				'screenshot' => $request->get_param( 'screenshot' ),
-				'url'        => $request->get_param( 'url' ),
-				'comment'    => $request->get_param( 'comment' ),
-				'email'      => $request->get_param( 'email' ),
-				'selection'  => $request->get_param( 'selection' ),
-				'viewport'   => $request->get_param( 'viewport' ),
-				'browser'    => $request->get_param( 'browser' ),
+				'feedback_type'     => $request->get_param( 'feedback_type' ) ?: 'screenshot',
+				'screenshot'        => $request->get_param( 'screenshot' ),
+				'url'               => $request->get_param( 'url' ),
+				'comment'           => $request->get_param( 'comment' ),
+				'email'             => $request->get_param( 'email' ),
+				'selection'         => $request->get_param( 'selection' ),
+				'viewport'          => $request->get_param( 'viewport' ),
+				'browser'           => $request->get_param( 'browser' ),
+				// Extended device info
+				'device_type'       => $request->get_param( 'device_type' ),
+				'screen_resolution' => $request->get_param( 'screen_resolution' ),
+				'pixel_ratio'       => $request->get_param( 'pixel_ratio' ),
+				'color_depth'       => $request->get_param( 'color_depth' ),
+				'touch_enabled'     => $request->get_param( 'touch_enabled' ),
+				'color_scheme'      => $request->get_param( 'color_scheme' ),
+				'language'          => $request->get_param( 'language' ),
+				'timezone'          => $request->get_param( 'timezone' ),
+				'referrer'          => $request->get_param( 'referrer' ),
+				'cookies_enabled'   => $request->get_param( 'cookies_enabled' ),
+				'connection'        => $request->get_param( 'connection' ),
+				'memory'            => $request->get_param( 'memory' ),
 			];
 
-			// Validate screenshot data
-			if ( strpos( $data['screenshot'], 'data:image/' ) !== 0 ) {
+			// Validate screenshot data only if provided
+			if ( ! empty( $data['screenshot'] ) && strpos( $data['screenshot'], 'data:image/' ) !== 0 ) {
 				return new \WP_Error(
 					'invalid_screenshot',
 					__( 'Invalid screenshot format.', 'agoodbug' ),

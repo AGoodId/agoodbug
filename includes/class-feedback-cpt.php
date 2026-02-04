@@ -69,6 +69,7 @@ class Feedback_CPT {
 	public function register_meta() {
 		$meta_fields = [
 			'_screenshot_id'       => 'integer',
+			'_feedback_type'       => 'string',
 			'_page_url'            => 'string',
 			'_selection_coords'    => 'string',
 			'_viewport'            => 'string',
@@ -77,14 +78,36 @@ class Feedback_CPT {
 			'_reporter_name'       => 'string',
 			'_reporter_email'      => 'string',
 			'_destination_results' => 'string',
+			// Extended device info
+			'_device_type'         => 'string',
+			'_screen_resolution'   => 'string',
+			'_pixel_ratio'         => 'number',
+			'_color_depth'         => 'integer',
+			'_touch_enabled'       => 'boolean',
+			'_color_scheme'        => 'string',
+			'_language'            => 'string',
+			'_timezone'            => 'string',
+			'_referrer'            => 'string',
+			'_cookies_enabled'     => 'boolean',
+			'_connection'          => 'string',
+			'_memory'              => 'string',
 		];
 
 		foreach ( $meta_fields as $key => $type ) {
+			$sanitize_callback = 'sanitize_text_field';
+			if ( $type === 'integer' ) {
+				$sanitize_callback = 'absint';
+			} elseif ( $type === 'number' ) {
+				$sanitize_callback = 'floatval';
+			} elseif ( $type === 'boolean' ) {
+				$sanitize_callback = 'rest_sanitize_boolean';
+			}
+
 			register_post_meta( self::POST_TYPE, $key, [
 				'type'              => $type,
 				'single'            => true,
 				'show_in_rest'      => true,
-				'sanitize_callback' => $type === 'integer' ? 'absint' : 'sanitize_text_field',
+				'sanitize_callback' => $sanitize_callback,
 			] );
 		}
 	}
@@ -118,18 +141,40 @@ class Feedback_CPT {
 	 * @param \WP_Post $post Post object.
 	 */
 	public function render_meta_box( $post ) {
-		$page_url     = get_post_meta( $post->ID, '_page_url', true );
-		$viewport     = get_post_meta( $post->ID, '_viewport', true );
-		$browser_info = get_post_meta( $post->ID, '_browser_info', true );
-		$reporter     = get_post_meta( $post->ID, '_reporter_name', true );
-		$email        = get_post_meta( $post->ID, '_reporter_email', true );
-		$destinations = get_post_meta( $post->ID, '_destination_results', true );
+		$page_url          = get_post_meta( $post->ID, '_page_url', true );
+		$viewport          = get_post_meta( $post->ID, '_viewport', true );
+		$browser_info      = get_post_meta( $post->ID, '_browser_info', true );
+		$reporter          = get_post_meta( $post->ID, '_reporter_name', true );
+		$email             = get_post_meta( $post->ID, '_reporter_email', true );
+		$destinations      = get_post_meta( $post->ID, '_destination_results', true );
+
+		// Extended device info
+		$device_type       = get_post_meta( $post->ID, '_device_type', true );
+		$screen_resolution = get_post_meta( $post->ID, '_screen_resolution', true );
+		$pixel_ratio       = get_post_meta( $post->ID, '_pixel_ratio', true );
+		$color_depth       = get_post_meta( $post->ID, '_color_depth', true );
+		$touch_enabled     = get_post_meta( $post->ID, '_touch_enabled', true );
+		$color_scheme      = get_post_meta( $post->ID, '_color_scheme', true );
+		$language          = get_post_meta( $post->ID, '_language', true );
+		$timezone          = get_post_meta( $post->ID, '_timezone', true );
+		$referrer          = get_post_meta( $post->ID, '_referrer', true );
+		$cookies_enabled   = get_post_meta( $post->ID, '_cookies_enabled', true );
+		$connection        = get_post_meta( $post->ID, '_connection', true );
+		$memory            = get_post_meta( $post->ID, '_memory', true );
 		?>
 		<style>
 			.agoodbug-meta-row { margin-bottom: 12px; }
 			.agoodbug-meta-label { font-weight: 600; font-size: 11px; text-transform: uppercase; color: #646970; margin-bottom: 4px; }
 			.agoodbug-meta-value { word-break: break-all; }
 			.agoodbug-meta-value a { text-decoration: none; }
+			.agoodbug-meta-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #ddd; }
+			.agoodbug-meta-section-title { font-weight: 600; font-size: 12px; color: #1d2327; margin-bottom: 12px; }
+			.agoodbug-device-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 500; text-transform: uppercase; }
+			.agoodbug-device-badge--mobile { background: #fef3cd; color: #856404; }
+			.agoodbug-device-badge--tablet { background: #d4edda; color: #155724; }
+			.agoodbug-device-badge--desktop { background: #cce5ff; color: #004085; }
+			.agoodbug-device-badge--dark { background: #343a40; color: #fff; }
+			.agoodbug-device-badge--light { background: #f8f9fa; color: #212529; border: 1px solid #dee2e6; }
 		</style>
 
 		<?php if ( $page_url ) : ?>
@@ -153,20 +198,6 @@ class Feedback_CPT {
 			</div>
 		<?php endif; ?>
 
-		<?php if ( $viewport ) : ?>
-			<div class="agoodbug-meta-row">
-				<div class="agoodbug-meta-label"><?php esc_html_e( 'Viewport', 'agoodbug' ); ?></div>
-				<div class="agoodbug-meta-value"><?php echo esc_html( $viewport ); ?></div>
-			</div>
-		<?php endif; ?>
-
-		<?php if ( $browser_info ) : ?>
-			<div class="agoodbug-meta-row">
-				<div class="agoodbug-meta-label"><?php esc_html_e( 'Browser', 'agoodbug' ); ?></div>
-				<div class="agoodbug-meta-value"><?php echo esc_html( $browser_info ); ?></div>
-			</div>
-		<?php endif; ?>
-
 		<?php if ( $destinations ) : ?>
 			<div class="agoodbug-meta-row">
 				<div class="agoodbug-meta-label"><?php esc_html_e( 'Sent To', 'agoodbug' ); ?></div>
@@ -183,6 +214,118 @@ class Feedback_CPT {
 				</div>
 			</div>
 		<?php endif; ?>
+
+		<!-- Device Information Section -->
+		<div class="agoodbug-meta-section">
+			<div class="agoodbug-meta-section-title"><?php esc_html_e( 'Device Information', 'agoodbug' ); ?></div>
+
+			<?php if ( $device_type ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Device Type', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value">
+						<span class="agoodbug-device-badge agoodbug-device-badge--<?php echo esc_attr( $device_type ); ?>">
+							<?php echo esc_html( ucfirst( $device_type ) ); ?>
+						</span>
+						<?php if ( $touch_enabled ) : ?>
+							<span title="<?php esc_attr_e( 'Touch enabled', 'agoodbug' ); ?>">👆</span>
+						<?php endif; ?>
+					</div>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $browser_info ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Browser / OS', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value"><?php echo esc_html( $browser_info ); ?></div>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $screen_resolution || $viewport ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Screen / Viewport', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value">
+						<?php
+						if ( $screen_resolution ) {
+							echo esc_html( $screen_resolution );
+							if ( $viewport && $screen_resolution !== $viewport ) {
+								echo ' → ' . esc_html( $viewport );
+							}
+						} else {
+							echo esc_html( $viewport );
+						}
+						if ( $pixel_ratio && $pixel_ratio > 1 ) {
+							echo ' <small>(@' . esc_html( $pixel_ratio ) . 'x)</small>';
+						}
+						?>
+					</div>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $color_scheme ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Color Scheme', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value">
+						<span class="agoodbug-device-badge agoodbug-device-badge--<?php echo esc_attr( $color_scheme ); ?>">
+							<?php echo $color_scheme === 'dark' ? '🌙 ' : '☀️ '; ?>
+							<?php echo esc_html( ucfirst( $color_scheme ) ); ?>
+						</span>
+					</div>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $language || $timezone ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Locale / Timezone', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value">
+						<?php
+						$locale_parts = [];
+						if ( $language ) {
+							$locale_parts[] = $language;
+						}
+						if ( $timezone ) {
+							$locale_parts[] = $timezone;
+						}
+						echo esc_html( implode( ' / ', $locale_parts ) );
+						?>
+					</div>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $connection && $connection !== 'unknown' ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Connection', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value">
+						<?php
+						$conn_data = json_decode( $connection, true );
+						if ( $conn_data && is_array( $conn_data ) ) {
+							echo esc_html( strtoupper( $conn_data['effectiveType'] ?? 'unknown' ) );
+							if ( ! empty( $conn_data['downlink'] ) && $conn_data['downlink'] !== 'unknown' ) {
+								echo ' (' . esc_html( $conn_data['downlink'] ) . ')';
+							}
+						} else {
+							echo esc_html( $connection );
+						}
+						?>
+					</div>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $memory && $memory !== 'unknown' ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Memory', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value"><?php echo esc_html( $memory ); ?></div>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $referrer && $referrer !== 'direct' ) : ?>
+				<div class="agoodbug-meta-row">
+					<div class="agoodbug-meta-label"><?php esc_html_e( 'Referrer', 'agoodbug' ); ?></div>
+					<div class="agoodbug-meta-value">
+						<a href="<?php echo esc_url( $referrer ); ?>" target="_blank"><?php echo esc_html( $referrer ); ?></a>
+					</div>
+				</div>
+			<?php endif; ?>
+		</div>
 		<?php
 	}
 
@@ -267,12 +410,19 @@ class Feedback_CPT {
 		$reporter_email = $is_logged_in ? $user->user_email : sanitize_email( $data['email'] ?? '' );
 		$reporter_id    = $is_logged_in ? $user->ID : 0;
 
+		// Determine title based on feedback type
+		$feedback_type = $data['feedback_type'] ?? 'screenshot';
+		$title_prefix  = $feedback_type === 'general'
+			? __( 'Feedback', 'agoodbug' )
+			: __( 'Bug Report', 'agoodbug' );
+
 		$post_data = [
 			'post_type'    => self::POST_TYPE,
 			'post_status'  => 'publish',
 			'post_title'   => sprintf(
-				/* translators: %1$s: page path, %2$s: date */
-				__( 'Bug Report: %1$s - %2$s', 'agoodbug' ),
+				/* translators: %1$s: feedback type prefix, %2$s: page path, %3$s: date */
+				'%1$s: %2$s - %3$s',
+				$title_prefix,
 				wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/',
 				wp_date( 'Y-m-d H:i' )
 			),
@@ -287,6 +437,7 @@ class Feedback_CPT {
 		}
 
 		// Save meta
+		update_post_meta( $post_id, '_feedback_type', sanitize_text_field( $data['feedback_type'] ?? 'screenshot' ) );
 		update_post_meta( $post_id, '_page_url', esc_url_raw( $data['url'] ) );
 		update_post_meta( $post_id, '_viewport', sanitize_text_field( $data['viewport'] ?? '' ) );
 		update_post_meta( $post_id, '_browser_info', sanitize_text_field( $data['browser'] ?? '' ) );
@@ -294,6 +445,20 @@ class Feedback_CPT {
 		update_post_meta( $post_id, '_reporter_id', $reporter_id );
 		update_post_meta( $post_id, '_reporter_name', $reporter_name );
 		update_post_meta( $post_id, '_reporter_email', $reporter_email );
+
+		// Extended device info
+		update_post_meta( $post_id, '_device_type', sanitize_text_field( $data['device_type'] ?? '' ) );
+		update_post_meta( $post_id, '_screen_resolution', sanitize_text_field( $data['screen_resolution'] ?? '' ) );
+		update_post_meta( $post_id, '_pixel_ratio', floatval( $data['pixel_ratio'] ?? 1 ) );
+		update_post_meta( $post_id, '_color_depth', absint( $data['color_depth'] ?? 0 ) );
+		update_post_meta( $post_id, '_touch_enabled', ! empty( $data['touch_enabled'] ) );
+		update_post_meta( $post_id, '_color_scheme', sanitize_text_field( $data['color_scheme'] ?? '' ) );
+		update_post_meta( $post_id, '_language', sanitize_text_field( $data['language'] ?? '' ) );
+		update_post_meta( $post_id, '_timezone', sanitize_text_field( $data['timezone'] ?? '' ) );
+		update_post_meta( $post_id, '_referrer', esc_url_raw( $data['referrer'] ?? '' ) );
+		update_post_meta( $post_id, '_cookies_enabled', ! empty( $data['cookies_enabled'] ) );
+		update_post_meta( $post_id, '_connection', sanitize_text_field( $data['connection'] ?? '' ) );
+		update_post_meta( $post_id, '_memory', sanitize_text_field( $data['memory'] ?? '' ) );
 
 		// Handle screenshot
 		if ( ! empty( $data['screenshot'] ) ) {

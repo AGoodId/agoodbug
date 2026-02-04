@@ -104,8 +104,19 @@ class AGoodApp {
 
 		$parts[] = '## ' . __( 'Details', 'agoodbug' );
 		$parts[] = '- **URL:** ' . $data['url'];
+		$parts[] = '- **Device:** ' . ucfirst( $data['device_type'] ?? 'unknown' ) . ( ! empty( $data['touch_enabled'] ) ? ' (touch)' : '' );
+		$parts[] = '- **Screen:** ' . ( $data['screen_resolution'] ?? 'N/A' ) . ( ! empty( $data['pixel_ratio'] ) && $data['pixel_ratio'] > 1 ? ' @' . $data['pixel_ratio'] . 'x' : '' );
 		$parts[] = '- **Viewport:** ' . ( $data['viewport'] ?? 'N/A' );
 		$parts[] = '- **Browser:** ' . ( $data['browser'] ?? 'N/A' );
+		if ( ! empty( $data['color_scheme'] ) ) {
+			$parts[] = '- **Color Scheme:** ' . ucfirst( $data['color_scheme'] );
+		}
+		if ( ! empty( $data['language'] ) ) {
+			$parts[] = '- **Language:** ' . $data['language'];
+		}
+		if ( ! empty( $data['timezone'] ) ) {
+			$parts[] = '- **Timezone:** ' . $data['timezone'];
+		}
 		$parts[] = '';
 
 		if ( $screenshot_url ) {

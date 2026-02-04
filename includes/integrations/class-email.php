@@ -119,13 +119,62 @@ class Email {
 							<span class="meta-value"><a href="<?php echo esc_url( $data['url'] ); ?>"><?php echo esc_html( $data['url'] ); ?></a></span>
 						</div>
 						<div class="meta-row">
-							<span class="meta-label"><?php esc_html_e( 'Viewport:', 'agoodbug' ); ?></span>
-							<span class="meta-value"><?php echo esc_html( $data['viewport'] ?? 'N/A' ); ?></span>
+							<span class="meta-label"><?php esc_html_e( 'Device:', 'agoodbug' ); ?></span>
+							<span class="meta-value">
+								<?php
+								$device_type = $data['device_type'] ?? '';
+								$touch       = ! empty( $data['touch_enabled'] ) ? ' 👆' : '';
+								echo esc_html( ucfirst( $device_type ) . $touch );
+								?>
+							</span>
+						</div>
+						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'Screen:', 'agoodbug' ); ?></span>
+							<span class="meta-value">
+								<?php
+								$screen   = $data['screen_resolution'] ?? '';
+								$viewport = $data['viewport'] ?? '';
+								$ratio    = $data['pixel_ratio'] ?? 1;
+								echo esc_html( $screen );
+								if ( $viewport && $screen !== $viewport ) {
+									echo ' → ' . esc_html( $viewport );
+								}
+								if ( $ratio > 1 ) {
+									echo ' (@' . esc_html( $ratio ) . 'x)';
+								}
+								?>
+							</span>
 						</div>
 						<div class="meta-row">
 							<span class="meta-label"><?php esc_html_e( 'Browser:', 'agoodbug' ); ?></span>
 							<span class="meta-value"><?php echo esc_html( $data['browser'] ?? 'N/A' ); ?></span>
 						</div>
+						<?php if ( ! empty( $data['color_scheme'] ) ) : ?>
+						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'Theme:', 'agoodbug' ); ?></span>
+							<span class="meta-value">
+								<?php echo $data['color_scheme'] === 'dark' ? '🌙 ' : '☀️ '; ?>
+								<?php echo esc_html( ucfirst( $data['color_scheme'] ) ); ?>
+							</span>
+						</div>
+						<?php endif; ?>
+						<?php if ( ! empty( $data['language'] ) || ! empty( $data['timezone'] ) ) : ?>
+						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'Locale:', 'agoodbug' ); ?></span>
+							<span class="meta-value">
+								<?php
+								$locale_parts = [];
+								if ( ! empty( $data['language'] ) ) {
+									$locale_parts[] = $data['language'];
+								}
+								if ( ! empty( $data['timezone'] ) ) {
+									$locale_parts[] = $data['timezone'];
+								}
+								echo esc_html( implode( ' / ', $locale_parts ) );
+								?>
+							</span>
+						</div>
+						<?php endif; ?>
 					</div>
 
 					<div class="comment">

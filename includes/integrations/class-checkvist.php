@@ -151,6 +151,57 @@ class Checkvist {
 
 		$lines[] = 'URL: ' . $data['url'];
 
+		// Device info
+		$device_info = [];
+		if ( ! empty( $data['device_type'] ) ) {
+			$device_info[] = ucfirst( $data['device_type'] );
+		}
+		if ( ! empty( $data['touch_enabled'] ) ) {
+			$device_info[] = 'touch';
+		}
+		if ( ! empty( $device_info ) ) {
+			$lines[] = 'Enhet: ' . implode( ', ', $device_info );
+		}
+
+		// Screen info
+		$screen_info = [];
+		if ( ! empty( $data['screen_resolution'] ) ) {
+			$screen_info[] = $data['screen_resolution'];
+		}
+		if ( ! empty( $data['viewport'] ) && ( empty( $data['screen_resolution'] ) || $data['screen_resolution'] !== $data['viewport'] ) ) {
+			$screen_info[] = 'viewport ' . $data['viewport'];
+		}
+		if ( ! empty( $data['pixel_ratio'] ) && $data['pixel_ratio'] > 1 ) {
+			$screen_info[] = '@' . $data['pixel_ratio'] . 'x';
+		}
+		if ( ! empty( $screen_info ) ) {
+			$lines[] = 'Skärm: ' . implode( ', ', $screen_info );
+		}
+
+		// Browser
+		if ( ! empty( $data['browser'] ) ) {
+			$lines[] = 'Browser: ' . $data['browser'];
+		}
+
+		// Color scheme
+		if ( ! empty( $data['color_scheme'] ) ) {
+			$lines[] = 'Tema: ' . ucfirst( $data['color_scheme'] );
+		}
+
+		// Locale
+		$locale_info = [];
+		if ( ! empty( $data['language'] ) ) {
+			$locale_info[] = $data['language'];
+		}
+		if ( ! empty( $data['timezone'] ) ) {
+			$locale_info[] = $data['timezone'];
+		}
+		if ( ! empty( $locale_info ) ) {
+			$lines[] = 'Språk/Zon: ' . implode( ' / ', $locale_info );
+		}
+
+		$lines[] = '';
+
 		// Reporter info
 		$reporter = '';
 		if ( $user->ID > 0 ) {
