@@ -261,6 +261,80 @@ class Settings {
 				'placeholder' => 'owner/repo',
 			]
 		);
+
+		// AGoodMember section
+		add_settings_section(
+			'agoodbug_agoodmember',
+			__( 'AGoodMember Integration', 'agoodbug' ),
+			[ $this, 'render_agoodmember_section' ],
+			'agoodbug'
+		);
+
+		add_settings_field(
+			'agoodmember_enabled',
+			__( 'Enable', 'agoodbug' ),
+			[ $this, 'render_checkbox_field' ],
+			'agoodbug',
+			'agoodbug_agoodmember',
+			[ 'name' => 'agoodmember_enabled' ]
+		);
+
+		add_settings_field(
+			'agoodmember_url',
+			__( 'API URL', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_agoodmember',
+			[
+				'name'        => 'agoodmember_url',
+				'placeholder' => 'https://your-agoodmember.vercel.app',
+				'description' => __( 'The URL to your AGoodMember installation.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'agoodmember_token',
+			__( 'API Token', 'agoodbug' ),
+			[ $this, 'render_password_field' ],
+			'agoodbug',
+			'agoodbug_agoodmember',
+			[
+				'name'        => 'agoodmember_token',
+				'description' => __( 'Supabase JWT token for API authentication.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'agoodmember_project_id',
+			__( 'Project ID', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_agoodmember',
+			[
+				'name'        => 'agoodmember_project_id',
+				'description' => __( 'UUID of the project to assign tasks to (optional).', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'agoodmember_assignee_email',
+			__( 'Default Assignee Email', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_agoodmember',
+			[
+				'name'        => 'agoodmember_assignee_email',
+				'placeholder' => 'user@example.com',
+				'description' => __( 'Email of the person to automatically assign tasks to.', 'agoodbug' ),
+			]
+		);
+	}
+
+	/**
+	 * Render AGoodMember section
+	 */
+	public function render_agoodmember_section() {
+		echo '<p>' . esc_html__( 'Send bug reports as tasks to AGoodMember.', 'agoodbug' ) . '</p>';
 	}
 
 	/**
@@ -283,10 +357,15 @@ class Settings {
 			'checkvist_username' => '',
 			'checkvist_api_key'  => '',
 			'checkvist_list_id'  => '',
-			'github_enabled'     => false,
-			'github_token'       => '',
-			'github_repo'        => '',
-			'rate_limit'         => 10,
+			'github_enabled'            => false,
+			'github_token'              => '',
+			'github_repo'               => '',
+			'agoodmember_enabled'       => false,
+			'agoodmember_url'           => '',
+			'agoodmember_token'         => '',
+			'agoodmember_project_id'    => '',
+			'agoodmember_assignee_email' => '',
+			'rate_limit'                => 10,
 		];
 	}
 
@@ -327,8 +406,15 @@ class Settings {
 		$sanitized['github_token']   = sanitize_text_field( $input['github_token'] ?? '' );
 		$sanitized['github_repo']    = sanitize_text_field( $input['github_repo'] ?? '' );
 
+		// AGoodMember
+		$sanitized['agoodmember_enabled']        = ! empty( $input['agoodmember_enabled'] );
+		$sanitized['agoodmember_url']            = esc_url_raw( $input['agoodmember_url'] ?? '' );
+		$sanitized['agoodmember_token']          = sanitize_text_field( $input['agoodmember_token'] ?? '' );
+		$sanitized['agoodmember_project_id']     = sanitize_text_field( $input['agoodmember_project_id'] ?? '' );
+		$sanitized['agoodmember_assignee_email'] = sanitize_email( $input['agoodmember_assignee_email'] ?? '' );
+
 		// Rate limit
-		$sanitized['rate_limit'] = absint( $input['rate_limit'] ?? $defaults['rate_limit'] );
+		$sanitized['rate_limit'] = absint( $input['rate_limit'] ?? $defaults['rate_limit'] )
 
 		return $sanitized;
 	}
@@ -444,11 +530,12 @@ class Settings {
 		$destinations = $settings['destinations'] ?? [ 'cpt' ];
 
 		$options = [
-			'cpt'       => __( 'Save in WordPress (Bug Reports)', 'agoodbug' ),
-			'email'     => __( 'Send email', 'agoodbug' ),
-			'agoodapp'  => __( 'Send to AGoodApp', 'agoodbug' ),
-			'checkvist' => __( 'Create Checkvist task', 'agoodbug' ),
-			'github'    => __( 'Create GitHub issue', 'agoodbug' ),
+			'cpt'         => __( 'Save in WordPress (Bug Reports)', 'agoodbug' ),
+			'email'       => __( 'Send email', 'agoodbug' ),
+			'agoodapp'    => __( 'Send to AGoodApp', 'agoodbug' ),
+			'checkvist'   => __( 'Create Checkvist task', 'agoodbug' ),
+			'github'      => __( 'Create GitHub issue', 'agoodbug' ),
+			'agoodmember' => __( 'Create AGoodMember task', 'agoodbug' ),
 		];
 		?>
 		<fieldset>

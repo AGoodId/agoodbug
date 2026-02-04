@@ -311,6 +311,17 @@ class REST_API {
 				}
 			}
 
+			// Send to AGoodMember (wrapped in try-catch)
+			if ( in_array( 'agoodmember', $destinations, true ) && ! empty( $settings['agoodmember_enabled'] ) ) {
+				try {
+					$agoodmember = new Integrations\AGoodMember();
+					$results['agoodmember'] = $agoodmember->send( $data, $screenshot_url, $post_id );
+				} catch ( \Exception $e ) {
+					$results['agoodmember'] = false;
+					error_log( 'AGoodBug - AGoodMember error: ' . $e->getMessage() );
+				}
+			}
+
 			// Save destination results
 			update_post_meta( $post_id, '_destination_results', wp_json_encode( $results ) );
 
