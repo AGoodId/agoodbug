@@ -12,6 +12,11 @@ use AGoodBug\Plugin;
 class AGoodMember {
 
 	/**
+	 * AGoodMember API URL (hardcoded)
+	 */
+	const API_URL = 'https://www.agoodsport.se';
+
+	/**
 	 * Send feedback to AGoodMember as a task
 	 *
 	 * @param array  $data           Feedback data.
@@ -22,32 +27,20 @@ class AGoodMember {
 	public function send( $data, $screenshot_url, $post_id ) {
 		$settings = Plugin::get_settings();
 
-		$api_url       = rtrim( $settings['agoodmember_url'] ?? '', '/' );
-		$token         = $settings['agoodmember_token'] ?? '';
-		$project_id    = $settings['agoodmember_project_id'] ?? '';
-		$assignee_email = $settings['agoodmember_assignee_email'] ?? '';
+		$api_url    = self::API_URL;
+		$api_key    = $settings['agoodmember_token'] ?? '';
+		$project_id = $settings['agoodmember_project_id'] ?? '';
 
-		if ( empty( $api_url ) || empty( $token ) ) {
-			error_log( 'AGoodBug - AGoodMember: Missing API URL or token' );
+		if ( empty( $api_key ) ) {
+			error_log( 'AGoodBug - AGoodMember: Missing API key' );
 			return false;
-		}
-
-		$user = wp_get_current_user();
-
-		// Look up assignee by email if configured
-		$assignee_ids = [];
-		if ( ! empty( $assignee_email ) ) {
-			$person_id = $this->lookup_person_by_email( $api_url, $token, $assignee_email );
-			if ( $person_id ) {
-				$assignee_ids[] = $person_id;
-			}
 		}
 
 		// Determine feedback type for title prefix
 		$feedback_type = $data['feedback_type'] ?? 'screenshot';
-		$title_prefix  = $feedback_type === 'general' ? 'Feedback' : 'Bug Report';
+		$title_prefix  = $feedback_type === 'general' ? 'Feedback' : 'Buggrapport';
 
-		// Build task data
+		// Build task data for external API
 		$task_data = [
 			'title'       => sprintf(
 				'%s: %s',
@@ -58,8 +51,10 @@ class AGoodMember {
 			'type'        => 'bug',
 			'status'      => 'ska göras',
 			'priority'    => 'medel',
-			'due_date'    => wp_date( 'Y-m-d' ), // Today
+			'due_date'    => wp_date( 'Y-m-d' ),
 			'tags'        => [ 'agoodbug', 'frontend' ],
+			'source'      => 'agoodbug',
+			'source_url'  => $data['url'] ?? '',
 		];
 
 		// Add project if configured
@@ -67,17 +62,13 @@ class AGoodMember {
 			$task_data['project_id'] = $project_id;
 		}
 
-		// Add assignees if found
-		if ( ! empty( $assignee_ids ) ) {
-			$task_data['assignee_ids'] = $assignee_ids;
-		}
+		error_log( 'AGoodBug - AGoodMember: Creating task via external API' );
 
-		error_log( 'AGoodBug - AGoodMember: Creating task with data: ' . wp_json_encode( $task_data ) );
-
-		$response = wp_remote_post( $api_url . '/api/tasks', [
+		// Use the external tasks API with API key authentication
+		$response = wp_remote_post( $api_url . '/api/external/tasks', [
 			'headers' => [
-				'Authorization' => 'Bearer ' . $token,
-				'Content-Type'  => 'application/json',
+				'X-API-Key'    => $api_key,
+				'Content-Type' => 'application/json',
 			],
 			'body'    => wp_json_encode( $task_data ),
 			'timeout' => 30,
@@ -92,9 +83,9 @@ class AGoodMember {
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
 		error_log( 'AGoodBug - AGoodMember response code: ' . $code );
-		error_log( 'AGoodBug - AGoodMember response: ' . wp_json_encode( $body ) );
 
-		if ( $code >= 200 && $code < 300 && ! empty( $body['task']['task_number'] ) ) {
+		if ( $code === 201 && ! empty( $body['task']['task_number'] ) ) {
+			error_log( 'AGoodBug - AGoodMember: Task created #' . $body['task']['task_number'] );
 			return '#' . $body['task']['task_number'];
 		}
 
@@ -103,46 +94,6 @@ class AGoodMember {
 		}
 
 		return false;
-	}
-
-	/**
-	 * Look up a person ID by email address
-	 *
-	 * @param string $api_url Base API URL.
-	 * @param string $token   Auth token.
-	 * @param string $email   Email to search for.
-	 * @return string|null Person ID or null if not found.
-	 */
-	private function lookup_person_by_email( $api_url, $token, $email ) {
-		$response = wp_remote_get(
-			add_query_arg( 'query', $email, $api_url . '/api/tasks/assignees/search' ),
-			[
-				'headers' => [
-					'Authorization' => 'Bearer ' . $token,
-					'Content-Type'  => 'application/json',
-				],
-				'timeout' => 15,
-			]
-		);
-
-		if ( is_wp_error( $response ) ) {
-			error_log( 'AGoodBug - AGoodMember person lookup error: ' . $response->get_error_message() );
-			return null;
-		}
-
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( ! empty( $body['assignees'] ) && is_array( $body['assignees'] ) ) {
-			foreach ( $body['assignees'] as $person ) {
-				if ( isset( $person['email'] ) && strtolower( $person['email'] ) === strtolower( $email ) ) {
-					error_log( 'AGoodBug - AGoodMember: Found person ' . $person['id'] . ' for email ' . $email );
-					return $person['id'];
-				}
-			}
-		}
-
-		error_log( 'AGoodBug - AGoodMember: No person found for email ' . $email );
-		return null;
 	}
 
 	/**

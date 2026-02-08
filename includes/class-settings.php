@@ -280,52 +280,27 @@ class Settings {
 		);
 
 		add_settings_field(
-			'agoodmember_url',
-			__( 'API URL', 'agoodbug' ),
-			[ $this, 'render_text_field' ],
-			'agoodbug',
-			'agoodbug_agoodmember',
-			[
-				'name'        => 'agoodmember_url',
-				'placeholder' => 'https://your-agoodmember.vercel.app',
-				'description' => __( 'The URL to your AGoodMember installation.', 'agoodbug' ),
-			]
-		);
-
-		add_settings_field(
 			'agoodmember_token',
-			__( 'API Token', 'agoodbug' ),
+			__( 'API-nyckel', 'agoodbug' ),
 			[ $this, 'render_password_field' ],
 			'agoodbug',
 			'agoodbug_agoodmember',
 			[
 				'name'        => 'agoodmember_token',
-				'description' => __( 'Supabase JWT token for API authentication.', 'agoodbug' ),
+				'description' => __( 'Generera en API-nyckel i AGoodMember → Inställningar → API-nycklar.', 'agoodbug' ),
 			]
 		);
 
 		add_settings_field(
 			'agoodmember_project_id',
-			__( 'Project ID', 'agoodbug' ),
+			__( 'Project', 'agoodbug' ),
 			[ $this, 'render_text_field' ],
 			'agoodbug',
 			'agoodbug_agoodmember',
 			[
 				'name'        => 'agoodmember_project_id',
-				'description' => __( 'UUID of the project to assign tasks to (optional).', 'agoodbug' ),
-			]
-		);
-
-		add_settings_field(
-			'agoodmember_assignee_email',
-			__( 'Default Assignee Email', 'agoodbug' ),
-			[ $this, 'render_text_field' ],
-			'agoodbug',
-			'agoodbug_agoodmember',
-			[
-				'name'        => 'agoodmember_assignee_email',
-				'placeholder' => 'user@example.com',
-				'description' => __( 'Email of the person to automatically assign tasks to.', 'agoodbug' ),
+				'placeholder' => 'https://www.agoodsport.se/projects/...',
+				'description' => __( 'Klistra in projekt-URL från AGoodMember (valfritt).', 'agoodbug' ),
 			]
 		);
 	}
@@ -357,15 +332,13 @@ class Settings {
 			'checkvist_username' => '',
 			'checkvist_api_key'  => '',
 			'checkvist_list_id'  => '',
-			'github_enabled'            => false,
-			'github_token'              => '',
-			'github_repo'               => '',
-			'agoodmember_enabled'       => false,
-			'agoodmember_url'           => '',
-			'agoodmember_token'         => '',
-			'agoodmember_project_id'    => '',
-			'agoodmember_assignee_email' => '',
-			'rate_limit'                => 10,
+			'github_enabled'             => false,
+			'github_token'               => '',
+			'github_repo'                => '',
+			'agoodmember_enabled'    => false,
+			'agoodmember_token'      => '',
+			'agoodmember_project_id' => '',
+			'rate_limit'             => 10,
 		];
 	}
 
@@ -407,11 +380,9 @@ class Settings {
 		$sanitized['github_repo']    = sanitize_text_field( $input['github_repo'] ?? '' );
 
 		// AGoodMember
-		$sanitized['agoodmember_enabled']        = ! empty( $input['agoodmember_enabled'] );
-		$sanitized['agoodmember_url']            = esc_url_raw( $input['agoodmember_url'] ?? '' );
-		$sanitized['agoodmember_token']          = sanitize_text_field( $input['agoodmember_token'] ?? '' );
-		$sanitized['agoodmember_project_id']     = sanitize_text_field( $input['agoodmember_project_id'] ?? '' );
-		$sanitized['agoodmember_assignee_email'] = sanitize_email( $input['agoodmember_assignee_email'] ?? '' );
+		$sanitized['agoodmember_enabled']    = ! empty( $input['agoodmember_enabled'] );
+		$sanitized['agoodmember_token']      = sanitize_text_field( $input['agoodmember_token'] ?? '' );
+		$sanitized['agoodmember_project_id'] = $this->extract_project_id( $input['agoodmember_project_id'] ?? '' );
 
 		// Rate limit
 		$sanitized['rate_limit'] = absint( $input['rate_limit'] ?? $defaults['rate_limit'] );
@@ -550,5 +521,37 @@ class Settings {
 			<?php endforeach; ?>
 		</fieldset>
 		<?php
+	}
+
+	/**
+	 * Extract project ID from URL or return as-is if already a UUID
+	 *
+	 * @param string $input Project URL or UUID.
+	 * @return string Project UUID or empty string.
+	 */
+	private function extract_project_id( $input ) {
+		$input = trim( $input );
+
+		if ( empty( $input ) ) {
+			return '';
+		}
+
+		// UUID pattern
+		$uuid_pattern = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
+
+		// If it looks like a URL, extract the UUID from it
+		if ( filter_var( $input, FILTER_VALIDATE_URL ) || strpos( $input, '/projects/' ) !== false ) {
+			if ( preg_match( '#/projects/(' . $uuid_pattern . ')#i', $input, $matches ) ) {
+				return strtolower( $matches[1] );
+			}
+		}
+
+		// If it's already a UUID, return it
+		if ( preg_match( '/^' . $uuid_pattern . '$/i', $input ) ) {
+			return strtolower( $input );
+		}
+
+		// Invalid input
+		return '';
 	}
 }
