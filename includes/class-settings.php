@@ -126,53 +126,6 @@ class Settings {
 			]
 		);
 
-		// AGoodApp section
-		add_settings_section(
-			'agoodbug_agoodapp',
-			__( 'AGoodApp Integration', 'agoodbug' ),
-			null,
-			'agoodbug'
-		);
-
-		add_settings_field(
-			'agoodapp_enabled',
-			__( 'Enable', 'agoodbug' ),
-			[ $this, 'render_checkbox_field' ],
-			'agoodbug',
-			'agoodbug_agoodapp',
-			[ 'name' => 'agoodapp_enabled' ]
-		);
-
-		add_settings_field(
-			'agoodapp_url',
-			__( 'API URL', 'agoodbug' ),
-			[ $this, 'render_text_field' ],
-			'agoodbug',
-			'agoodbug_agoodapp',
-			[
-				'name'        => 'agoodapp_url',
-				'placeholder' => 'https://app.agoodid.se',
-			]
-		);
-
-		add_settings_field(
-			'agoodapp_token',
-			__( 'API Token', 'agoodbug' ),
-			[ $this, 'render_password_field' ],
-			'agoodbug',
-			'agoodbug_agoodapp',
-			[ 'name' => 'agoodapp_token' ]
-		);
-
-		add_settings_field(
-			'agoodapp_org_id',
-			__( 'Organization ID', 'agoodbug' ),
-			[ $this, 'render_text_field' ],
-			'agoodbug',
-			'agoodbug_agoodapp',
-			[ 'name' => 'agoodapp_org_id' ]
-		);
-
 		// Checkvist section
 		add_settings_section(
 			'agoodbug_checkvist',
@@ -222,44 +175,6 @@ class Settings {
 			'agoodbug',
 			'agoodbug_checkvist',
 			[ 'name' => 'checkvist_list_id' ]
-		);
-
-		// GitHub section
-		add_settings_section(
-			'agoodbug_github',
-			__( 'GitHub Integration', 'agoodbug' ),
-			null,
-			'agoodbug'
-		);
-
-		add_settings_field(
-			'github_enabled',
-			__( 'Enable', 'agoodbug' ),
-			[ $this, 'render_checkbox_field' ],
-			'agoodbug',
-			'agoodbug_github',
-			[ 'name' => 'github_enabled' ]
-		);
-
-		add_settings_field(
-			'github_token',
-			__( 'Personal Access Token', 'agoodbug' ),
-			[ $this, 'render_password_field' ],
-			'agoodbug',
-			'agoodbug_github',
-			[ 'name' => 'github_token' ]
-		);
-
-		add_settings_field(
-			'github_repo',
-			__( 'Repository', 'agoodbug' ),
-			[ $this, 'render_text_field' ],
-			'agoodbug',
-			'agoodbug_github',
-			[
-				'name'        => 'github_repo',
-				'placeholder' => 'owner/repo',
-			]
 		);
 
 		// AGoodMember section
@@ -323,18 +238,11 @@ class Settings {
 			'allow_anonymous'    => false,
 			'roles'              => [ 'administrator', 'editor' ],
 			'destinations'       => [ 'cpt', 'email' ],
-			'email_recipients'   => get_option( 'admin_email' ),
-			'agoodapp_enabled'   => false,
-			'agoodapp_url'       => '',
-			'agoodapp_token'     => '',
-			'agoodapp_org_id'    => '',
-			'checkvist_enabled'  => false,
-			'checkvist_username' => '',
-			'checkvist_api_key'  => '',
-			'checkvist_list_id'  => '',
-			'github_enabled'             => false,
-			'github_token'               => '',
-			'github_repo'                => '',
+			'email_recipients'       => get_option( 'admin_email' ),
+			'checkvist_enabled'      => false,
+			'checkvist_username'     => '',
+			'checkvist_api_key'      => '',
+			'checkvist_list_id'      => '',
 			'agoodmember_enabled'    => false,
 			'agoodmember_token'      => '',
 			'agoodmember_project_id' => '',
@@ -362,22 +270,11 @@ class Settings {
 			: $defaults['destinations'];
 		$sanitized['email_recipients'] = sanitize_text_field( $input['email_recipients'] ?? $defaults['email_recipients'] );
 
-		// AGoodApp
-		$sanitized['agoodapp_enabled'] = ! empty( $input['agoodapp_enabled'] );
-		$sanitized['agoodapp_url']     = esc_url_raw( $input['agoodapp_url'] ?? '' );
-		$sanitized['agoodapp_token']   = sanitize_text_field( $input['agoodapp_token'] ?? '' );
-		$sanitized['agoodapp_org_id']  = sanitize_text_field( $input['agoodapp_org_id'] ?? '' );
-
 		// Checkvist
 		$sanitized['checkvist_enabled']  = ! empty( $input['checkvist_enabled'] );
 		$sanitized['checkvist_username'] = sanitize_email( $input['checkvist_username'] ?? '' );
 		$sanitized['checkvist_api_key']  = sanitize_text_field( $input['checkvist_api_key'] ?? '' );
 		$sanitized['checkvist_list_id']  = sanitize_text_field( $input['checkvist_list_id'] ?? '' );
-
-		// GitHub
-		$sanitized['github_enabled'] = ! empty( $input['github_enabled'] );
-		$sanitized['github_token']   = sanitize_text_field( $input['github_token'] ?? '' );
-		$sanitized['github_repo']    = sanitize_text_field( $input['github_repo'] ?? '' );
 
 		// AGoodMember
 		$sanitized['agoodmember_enabled']    = ! empty( $input['agoodmember_enabled'] );
@@ -503,9 +400,7 @@ class Settings {
 		$options = [
 			'cpt'         => __( 'Save in WordPress (Bug Reports)', 'agoodbug' ),
 			'email'       => __( 'Send email', 'agoodbug' ),
-			'agoodapp'    => __( 'Send to AGoodApp', 'agoodbug' ),
 			'checkvist'   => __( 'Create Checkvist task', 'agoodbug' ),
-			'github'      => __( 'Create GitHub issue', 'agoodbug' ),
 			'agoodmember' => __( 'Create AGoodMember task', 'agoodbug' ),
 		];
 		?>

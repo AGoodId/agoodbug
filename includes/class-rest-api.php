@@ -278,17 +278,6 @@ class REST_API {
 				}
 			}
 
-			// Send to AGoodApp (wrapped in try-catch)
-			if ( in_array( 'agoodapp', $destinations, true ) && ! empty( $settings['agoodapp_enabled'] ) ) {
-				try {
-					$agoodapp = new Integrations\AGoodApp();
-					$results['agoodapp'] = $agoodapp->send( $data, $screenshot_url, $post_id );
-				} catch ( \Exception $e ) {
-					$results['agoodapp'] = false;
-					error_log( 'AGoodBug - AGoodApp error: ' . $e->getMessage() );
-				}
-			}
-
 			// Send to Checkvist (wrapped in try-catch)
 			if ( in_array( 'checkvist', $destinations, true ) && ! empty( $settings['checkvist_enabled'] ) ) {
 				try {
@@ -297,17 +286,6 @@ class REST_API {
 				} catch ( \Exception $e ) {
 					$results['checkvist'] = false;
 					error_log( 'AGoodBug - Checkvist error: ' . $e->getMessage() );
-				}
-			}
-
-			// Send to GitHub (wrapped in try-catch)
-			if ( in_array( 'github', $destinations, true ) && ! empty( $settings['github_enabled'] ) ) {
-				try {
-					$github = new Integrations\GitHub();
-					$results['github'] = $github->send( $data, $screenshot_url, $post_id );
-				} catch ( \Exception $e ) {
-					$results['github'] = false;
-					error_log( 'AGoodBug - GitHub error: ' . $e->getMessage() );
 				}
 			}
 
