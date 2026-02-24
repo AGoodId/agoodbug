@@ -419,15 +419,16 @@
 				ctx.strokeRect(padding, padding, width, height);
 
 				this.screenshot = croppedCanvas.toDataURL('image/png');
-				this.selection = {
+				const selectionData = {
 					x: Math.min(startX, endX),
 					y: Math.min(startY, endY),
 					width: Math.abs(endX - startX),
 					height: Math.abs(endY - startY)
 				};
 
-				// Show modal
+				// Show modal (cancelCapture resets this.selection, so restore after)
 				this.cancelCapture();
+				this.selection = selectionData;
 				this.openModal();
 
 			} catch (error) {

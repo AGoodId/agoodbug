@@ -61,7 +61,7 @@ class REST_API {
 					'sanitize_callback' => 'sanitize_email',
 				],
 				'selection' => [
-					'type'     => 'string',
+					'type'     => [ 'string', 'null' ],
 					'required' => false,
 				],
 				'viewport' => [
