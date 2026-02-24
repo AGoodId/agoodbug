@@ -42,7 +42,7 @@ class REST_API {
 					'sanitize_callback' => 'sanitize_text_field',
 				],
 				'screenshot' => [
-					'type'              => 'string',
+					'type'              => [ 'string', 'null' ],
 					'required'          => false, // Now optional for general feedback
 				],
 				'url' => [

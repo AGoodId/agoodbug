@@ -98,7 +98,9 @@ class Feedback_CPT {
 			if ( $type === 'integer' ) {
 				$sanitize_callback = 'absint';
 			} elseif ( $type === 'number' ) {
-				$sanitize_callback = 'floatval';
+				$sanitize_callback = function ( $value ) {
+					return floatval( $value );
+				};
 			} elseif ( $type === 'boolean' ) {
 				$sanitize_callback = 'rest_sanitize_boolean';
 			}
