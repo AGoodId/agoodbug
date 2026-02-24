@@ -62,7 +62,7 @@ class Plugin {
 	 * Initialize frontend widget
 	 */
 	private function init_frontend() {
-		if ( ! is_admin() && ! empty( $this->settings['enabled'] ) ) {
+		if ( ! empty( $this->settings['enabled'] ) ) {
 			$frontend = new Frontend();
 			$frontend->init();
 		}

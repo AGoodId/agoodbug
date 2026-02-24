@@ -13,8 +13,13 @@ class Frontend {
 	 * Initialize
 	 */
 	public function init() {
+		// Frontend
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'wp_footer', [ $this, 'render_widget' ] );
+
+		// Admin pages
+		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+		add_action( 'admin_footer', [ $this, 'render_widget' ] );
 	}
 
 	/**
