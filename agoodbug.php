@@ -3,7 +3,7 @@
  * Plugin Name: AGoodBug
  * Plugin URI: https://github.com/AGoodId/agoodbug
  * Description: Visual feedback and bug reporting widget with screenshot capture.
- * Version: 1.3.1
+ * Version: 1.4.0
  * Author: AGoodId
  * Author URI: https://agoodid.se
  * License: GPL-2.0+
@@ -22,10 +22,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'AGOODBUG_VERSION', '1.3.1' );
+define( 'AGOODBUG_VERSION', '1.4.0' );
 define( 'AGOODBUG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+
+// Auto-update from GitHub releases
+require AGOODBUG_PLUGIN_DIR . 'plugin-update-checker/plugin-update-checker.php';
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$agoodbugUpdateChecker = PucFactory::buildUpdateChecker(
+	'https://github.com/AGoodId/agoodbug/',
+	__FILE__,
+	'agoodbug'
+);
+$agoodbugUpdateChecker->setBranch( 'main' );
+$agoodbugUpdateChecker->getVcsApi()->enableReleaseAssets();
 
 /**
  * Autoloader for plugin classes
