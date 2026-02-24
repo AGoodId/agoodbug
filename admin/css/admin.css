@@ -50,3 +50,27 @@
 .agoodbug-settings__footer li {
 	margin-bottom: 8px;
 }
+
+/* Project select */
+#agoodbug-project-select {
+	min-width: 300px;
+}
+
+.agoodbug-project-status {
+	display: inline-block;
+	margin-left: 8px;
+	font-size: 13px;
+}
+
+.agoodbug-project-status--loading {
+	color: #666;
+	font-style: italic;
+}
+
+.agoodbug-project-status--error {
+	color: #d63638;
+}
+
+.agoodbug-project-status--info {
+	color: #666;
+}
