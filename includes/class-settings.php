@@ -19,7 +19,6 @@ class Settings {
 	 */
 	public function init() {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
-		add_action( 'wp_ajax_agoodbug_fetch_projects', [ $this, 'ajax_fetch_projects' ] );
 	}
 
 	/**
@@ -210,9 +209,14 @@ class Settings {
 		add_settings_field(
 			'agoodmember_project_id',
 			__( 'Projekt', 'agoodbug' ),
-			[ $this, 'render_project_select_field' ],
+			[ $this, 'render_text_field' ],
 			'agoodbug',
-			'agoodbug_agoodmember'
+			'agoodbug_agoodmember',
+			[
+				'name'        => 'agoodmember_project_id',
+				'placeholder' => 'https://www.agoodsport.se/projects/xxxxxxxx-xxxx-...',
+				'description' => __( 'Klistra in projekt-URL eller UUID från AGoodMember (valfritt).', 'agoodbug' ),
+			]
 		);
 	}
 
@@ -412,64 +416,6 @@ class Settings {
 			<?php endforeach; ?>
 		</fieldset>
 		<?php
-	}
-
-	/**
-	 * Render project select field with dynamic loading
-	 */
-	public function render_project_select_field() {
-		$settings = get_option( self::OPTION_NAME, $this->get_defaults() );
-		$value    = $settings['agoodmember_project_id'] ?? '';
-		?>
-		<select id="agoodbug-project-select" class="regular-text" disabled>
-			<option value="">&mdash; Laddar&hellip; &mdash;</option>
-		</select>
-		<input type="hidden" id="agoodbug-project-id" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_project_id]' ); ?>" value="<?php echo esc_attr( $value ); ?>" />
-		<span id="agoodbug-project-status" class="agoodbug-project-status"></span>
-		<p class="description"><?php esc_html_e( 'Välj ett projekt där buggrapporter ska skapas (valfritt).', 'agoodbug' ); ?></p>
-		<?php
-	}
-
-	/**
-	 * AJAX handler to fetch projects from AGoodMember
-	 */
-	public function ajax_fetch_projects() {
-		check_ajax_referer( 'agoodbug_admin', 'nonce' );
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( 'Behörighet saknas.' );
-		}
-
-		$api_key = isset( $_POST['api_key'] ) ? sanitize_text_field( wp_unslash( $_POST['api_key'] ) ) : '';
-
-		if ( empty( $api_key ) ) {
-			wp_send_json_error( 'API-nyckel saknas.' );
-		}
-
-		$api_url  = Integrations\AGoodMember::API_URL;
-		$response = wp_remote_get( $api_url . '/api/external/projects', [
-			'headers' => [
-				'X-API-Key' => $api_key,
-			],
-			'timeout' => 15,
-		] );
-
-		if ( is_wp_error( $response ) ) {
-			wp_send_json_error( 'Kunde inte ansluta till AGoodMember: ' . $response->get_error_message() );
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( $code === 401 ) {
-			wp_send_json_error( 'Ogiltig API-nyckel.' );
-		}
-
-		if ( $code !== 200 || empty( $body['projects'] ) ) {
-			wp_send_json_error( $body['error'] ?? 'Inga projekt hittades.' );
-		}
-
-		wp_send_json_success( $body['projects'] );
 	}
 
 	/**

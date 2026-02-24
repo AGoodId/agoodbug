@@ -46,19 +46,6 @@ class Admin_Page {
 			[],
 			AGOODBUG_VERSION
 		);
-
-		wp_enqueue_script(
-			'agoodbug-admin',
-			AGOODBUG_PLUGIN_URL . 'admin/js/admin.js',
-			[],
-			AGOODBUG_VERSION,
-			true
-		);
-
-		wp_localize_script( 'agoodbug-admin', 'agoodbugAdmin', [
-			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-			'nonce'   => wp_create_nonce( 'agoodbug_admin' ),
-		] );
 	}
 
 	/**
