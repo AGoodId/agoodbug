@@ -77,6 +77,7 @@ class Frontend {
 		// Localize script
 		wp_localize_script( 'agoodbug', 'agoodbugConfig', [
 			'apiUrl'         => rest_url( 'agoodbug/v1/feedback' ),
+			'proxyUrl'       => rest_url( 'agoodbug/v1/proxy' ),
 			'nonce'          => wp_create_nonce( 'wp_rest' ),
 			'isLoggedIn'     => is_user_logged_in(),
 			'userEmail'      => $user_email,

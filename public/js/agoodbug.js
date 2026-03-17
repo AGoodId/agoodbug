@@ -379,7 +379,8 @@
 				// Capture with html2canvas
 				const canvas = await html2canvas(document.body, {
 					useCORS: true,
-					allowTaint: true,
+					allowTaint: false,
+					proxy: config.proxyUrl || null,
 					scale: window.devicePixelRatio || 1,
 					logging: false,
 				});

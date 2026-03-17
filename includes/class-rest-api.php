@@ -30,6 +30,19 @@ class REST_API {
 	 * Register REST routes
 	 */
 	public function register_routes() {
+		register_rest_route( self::NAMESPACE, '/proxy', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'proxy_image' ],
+			'permission_callback' => [ $this, 'check_permissions' ],
+			'args'                => [
+				'url' => [
+					'type'              => 'string',
+					'required'          => true,
+					'sanitize_callback' => 'esc_url_raw',
+				],
+			],
+		] );
+
 		register_rest_route( self::NAMESPACE, '/feedback', [
 			'methods'             => 'POST',
 			'callback'            => [ $this, 'submit_feedback' ],
@@ -129,6 +142,66 @@ class REST_API {
 			'callback'            => [ $this, 'get_settings' ],
 			'permission_callback' => [ $this, 'check_permissions' ],
 		] );
+	}
+
+	/**
+	 * Proxy external images for html2canvas CORS support
+	 *
+	 * html2canvas sends: GET {proxy}?url={encodedUrl}&responseType=text
+	 * and expects a raw base64-encoded string response.
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function proxy_image( $request ) {
+		$url = $request->get_param( 'url' );
+
+		if ( empty( $url ) ) {
+			return new \WP_Error( 'missing_url', 'URL is required.', [ 'status' => 400 ] );
+		}
+
+		// Only allow image URLs
+		$allowed_types = [ 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml' ];
+
+		$response = wp_remote_get( $url, [
+			'timeout' => 10,
+			'headers' => [
+				'Accept' => 'image/*',
+			],
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			return new \WP_Error( 'proxy_error', 'Failed to fetch image.', [ 'status' => 502 ] );
+		}
+
+		$content_type = wp_remote_retrieve_header( $response, 'content-type' );
+		$mime_type    = trim( strtok( $content_type, ';' ) );
+
+		if ( ! in_array( $mime_type, $allowed_types, true ) ) {
+			return new \WP_Error( 'invalid_type', 'URL is not an image.', [ 'status' => 400 ] );
+		}
+
+		$body   = wp_remote_retrieve_body( $response );
+		$base64 = base64_encode( $body );
+
+		// html2canvas expects raw base64 text response
+		$wp_response = new \WP_REST_Response();
+		$wp_response->set_status( 200 );
+		$wp_response->set_headers( [
+			'Content-Type'                => 'text/plain',
+			'Cache-Control'              => 'public, max-age=86400',
+			'Access-Control-Allow-Origin' => '*',
+		] );
+
+		add_filter( 'rest_pre_serve_request', function ( $served ) use ( $base64 ) {
+			header( 'Content-Type: text/plain' );
+			header( 'Cache-Control: public, max-age=86400' );
+			header( 'Access-Control-Allow-Origin: *' );
+			echo $base64; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return true;
+		}, 10, 1 );
+
+		return $wp_response;
 	}
 
 	/**
