@@ -121,16 +121,6 @@ class REST_API {
 					'type'              => 'boolean',
 					'required'          => false,
 				],
-				'connection' => [
-					'type'              => 'string',
-					'required'          => false,
-					'sanitize_callback' => 'sanitize_text_field',
-				],
-				'memory' => [
-					'type'              => 'string',
-					'required'          => false,
-					'sanitize_callback' => 'sanitize_text_field',
-				],
 			],
 		] );
 
@@ -237,8 +227,6 @@ class REST_API {
 				'timezone'          => $request->get_param( 'timezone' ),
 				'referrer'          => $request->get_param( 'referrer' ),
 				'cookies_enabled'   => $request->get_param( 'cookies_enabled' ),
-				'connection'        => $request->get_param( 'connection' ),
-				'memory'            => $request->get_param( 'memory' ),
 			];
 
 			// Validate screenshot data only if provided

@@ -89,8 +89,6 @@ class Feedback_CPT {
 			'_timezone'            => 'string',
 			'_referrer'            => 'string',
 			'_cookies_enabled'     => 'boolean',
-			'_connection'          => 'string',
-			'_memory'              => 'string',
 		];
 
 		foreach ( $meta_fields as $key => $type ) {
@@ -127,14 +125,6 @@ class Feedback_CPT {
 			'high'
 		);
 
-		add_meta_box(
-			'agoodbug_screenshot',
-			__( 'Screenshot', 'agoodbug' ),
-			[ $this, 'render_screenshot_meta_box' ],
-			self::POST_TYPE,
-			'normal',
-			'high'
-		);
 	}
 
 	/**
@@ -161,8 +151,6 @@ class Feedback_CPT {
 		$timezone          = get_post_meta( $post->ID, '_timezone', true );
 		$referrer          = get_post_meta( $post->ID, '_referrer', true );
 		$cookies_enabled   = get_post_meta( $post->ID, '_cookies_enabled', true );
-		$connection        = get_post_meta( $post->ID, '_connection', true );
-		$memory            = get_post_meta( $post->ID, '_memory', true );
 		?>
 		<style>
 			.agoodbug-meta-row { margin-bottom: 12px; }
@@ -178,6 +166,19 @@ class Feedback_CPT {
 			.agoodbug-device-badge--dark { background: #343a40; color: #fff; }
 			.agoodbug-device-badge--light { background: #f8f9fa; color: #212529; border: 1px solid #dee2e6; }
 		</style>
+
+		<?php
+		$screenshot_id = get_post_meta( $post->ID, '_screenshot_id', true );
+		if ( $screenshot_id ) :
+			$image_url = wp_get_attachment_url( $screenshot_id );
+			if ( $image_url ) :
+		?>
+			<div class="agoodbug-meta-row">
+				<a href="<?php echo esc_url( $image_url ); ?>" target="_blank">
+					<img src="<?php echo esc_url( $image_url ); ?>" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" alt="Screenshot" />
+				</a>
+			</div>
+		<?php endif; endif; ?>
 
 		<?php if ( $page_url ) : ?>
 			<div class="agoodbug-meta-row">
@@ -293,32 +294,6 @@ class Feedback_CPT {
 				</div>
 			<?php endif; ?>
 
-			<?php if ( $connection && $connection !== 'unknown' ) : ?>
-				<div class="agoodbug-meta-row">
-					<div class="agoodbug-meta-label"><?php esc_html_e( 'Connection', 'agoodbug' ); ?></div>
-					<div class="agoodbug-meta-value">
-						<?php
-						$conn_data = json_decode( $connection, true );
-						if ( $conn_data && is_array( $conn_data ) ) {
-							echo esc_html( strtoupper( $conn_data['effectiveType'] ?? 'unknown' ) );
-							if ( ! empty( $conn_data['downlink'] ) && $conn_data['downlink'] !== 'unknown' ) {
-								echo ' (' . esc_html( $conn_data['downlink'] ) . ')';
-							}
-						} else {
-							echo esc_html( $connection );
-						}
-						?>
-					</div>
-				</div>
-			<?php endif; ?>
-
-			<?php if ( $memory && $memory !== 'unknown' ) : ?>
-				<div class="agoodbug-meta-row">
-					<div class="agoodbug-meta-label"><?php esc_html_e( 'Memory', 'agoodbug' ); ?></div>
-					<div class="agoodbug-meta-value"><?php echo esc_html( $memory ); ?></div>
-				</div>
-			<?php endif; ?>
-
 			<?php if ( $referrer && $referrer !== 'direct' ) : ?>
 				<div class="agoodbug-meta-row">
 					<div class="agoodbug-meta-label"><?php esc_html_e( 'Referrer', 'agoodbug' ); ?></div>
@@ -418,16 +393,18 @@ class Feedback_CPT {
 			? __( 'Feedback', 'agoodbug' )
 			: __( 'Bug Report', 'agoodbug' );
 
+		// Build title from comment, fall back to URL path
+		$comment = trim( $data['comment'] ?? '' );
+		if ( ! empty( $comment ) ) {
+			$title = sprintf( '%s: %s', $title_prefix, wp_trim_words( $comment, 12, '…' ) );
+		} else {
+			$title = sprintf( '%s: %s', $title_prefix, wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/' );
+		}
+
 		$post_data = [
 			'post_type'    => self::POST_TYPE,
 			'post_status'  => 'publish',
-			'post_title'   => sprintf(
-				/* translators: %1$s: feedback type prefix, %2$s: page path, %3$s: date */
-				'%1$s: %2$s - %3$s',
-				$title_prefix,
-				wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/',
-				wp_date( 'Y-m-d H:i' )
-			),
+			'post_title'   => $title,
 			'post_content' => sanitize_textarea_field( $data['comment'] ?? '' ),
 			'post_author'  => $reporter_id ?: 1, // Use admin if anonymous
 		];
@@ -459,8 +436,6 @@ class Feedback_CPT {
 		update_post_meta( $post_id, '_timezone', sanitize_text_field( $data['timezone'] ?? '' ) );
 		update_post_meta( $post_id, '_referrer', esc_url_raw( $data['referrer'] ?? '' ) );
 		update_post_meta( $post_id, '_cookies_enabled', ! empty( $data['cookies_enabled'] ) );
-		update_post_meta( $post_id, '_connection', sanitize_text_field( $data['connection'] ?? '' ) );
-		update_post_meta( $post_id, '_memory', sanitize_text_field( $data['memory'] ?? '' ) );
 
 		// Handle screenshot
 		if ( ! empty( $data['screenshot'] ) ) {

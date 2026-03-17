@@ -20,7 +20,7 @@ class AGoodMember {
 	 * Send feedback to AGoodMember as a task
 	 *
 	 * @param array  $data           Feedback data.
-	 * @param string $screenshot_url Screenshot URL.
+	 * @param string $screenshot_url Screenshot URL (WP attachment URL).
 	 * @param int    $post_id        Post ID.
 	 * @return string|false Task number or false on failure.
 	 */
@@ -36,35 +36,35 @@ class AGoodMember {
 			return false;
 		}
 
-		// Determine feedback type for title prefix
+		// Build title from comment
 		$feedback_type = $data['feedback_type'] ?? 'screenshot';
-		$title_prefix  = $feedback_type === 'general' ? 'Feedback' : 'Buggrapport';
+		$title_prefix  = $feedback_type === 'general' ? 'Feedback' : 'Bug report';
+		$comment       = trim( $data['comment'] ?? '' );
 
-		// Build task data for external API
+		if ( ! empty( $comment ) ) {
+			$title = sprintf( '%s: %s', $title_prefix, wp_trim_words( $comment, 12, '…' ) );
+		} else {
+			$title = sprintf( '%s: %s', $title_prefix, wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/' );
+		}
+
+		// Step 1: Create the task
 		$task_data = [
-			'title'       => sprintf(
-				'%s: %s',
-				$title_prefix,
-				wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/'
-			),
-			'description' => $this->build_description( $data, $screenshot_url ),
-			'type'        => 'bug',
-			'status'      => 'ska göras',
-			'priority'    => 'medel',
-			'due_date'    => wp_date( 'Y-m-d' ),
-			'tags'        => [ 'agoodbug', 'frontend' ],
-			'source'      => 'agoodbug',
-			'source_url'  => $data['url'] ?? '',
+			'title'      => $title,
+			'type'       => 'bug',
+			'status'     => 'ska göras',
+			'priority'   => 'medel',
+			'due_date'   => wp_date( 'Y-m-d' ),
+			'tags'       => [ 'agoodbug', 'frontend' ],
+			'source'     => 'agoodbug',
+			'source_url' => $data['url'] ?? '',
 		];
 
-		// Add project if configured
 		if ( ! empty( $project_id ) ) {
 			$task_data['project_id'] = $project_id;
 		}
 
-		error_log( 'AGoodBug - AGoodMember: Creating task via external API' );
+		error_log( 'AGoodBug - AGoodMember: Creating task' );
 
-		// Use the external tasks API with API key authentication
 		$response = wp_remote_post( $api_url . '/api/external/tasks', [
 			'headers' => [
 				'X-API-Key'    => $api_key,
@@ -82,75 +82,153 @@ class AGoodMember {
 		$code = wp_remote_retrieve_response_code( $response );
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
-		error_log( 'AGoodBug - AGoodMember response code: ' . $code );
-
-		if ( $code === 201 && ! empty( $body['task']['task_number'] ) ) {
-			error_log( 'AGoodBug - AGoodMember: Task created #' . $body['task']['task_number'] );
-			return '#' . $body['task']['task_number'];
+		if ( $code !== 201 || empty( $body['task']['task_number'] ) ) {
+			error_log( 'AGoodBug - AGoodMember: Task creation failed (HTTP ' . $code . ')' );
+			if ( ! empty( $body['error'] ) ) {
+				error_log( 'AGoodBug - AGoodMember API error: ' . $body['error'] );
+			}
+			return false;
 		}
 
-		if ( ! empty( $body['error'] ) ) {
-			error_log( 'AGoodBug - AGoodMember API error: ' . $body['error'] );
+		$task_number = $body['task']['task_number'];
+		$task_id     = $body['task']['id']; // UUID for internal API
+		error_log( 'AGoodBug - AGoodMember: Task created #' . $task_number );
+
+		// Step 2: Upload screenshot if available
+		$uploaded_screenshot_url = '';
+		$screenshot_id           = get_post_meta( $post_id, '_screenshot_id', true );
+
+		if ( $screenshot_id ) {
+			$file_path = get_attached_file( $screenshot_id );
+
+			if ( $file_path && file_exists( $file_path ) ) {
+				$uploaded_screenshot_url = $this->upload_attachment( $api_url, $api_key, $task_number, $file_path );
+			}
 		}
 
-		return false;
+		// Step 3: Build HTML notes and update task (uses UUID via internal API)
+		$notes_html = $this->build_notes_html( $data, $uploaded_screenshot_url );
+
+		$this->update_task_notes( $api_url, $api_key, $task_id, $notes_html );
+
+		return '#' . $task_number;
 	}
 
 	/**
-	 * Build task description in Markdown
+	 * Upload screenshot to AGoodMember task attachments
+	 *
+	 * @param string $api_url     API base URL.
+	 * @param string $api_key     API key.
+	 * @param int    $task_number Task number.
+	 * @param string $file_path   Local file path.
+	 * @return string Uploaded file URL or empty string on failure.
+	 */
+	private function upload_attachment( $api_url, $api_key, $task_number, $file_path ) {
+		$boundary = wp_generate_password( 24, false );
+		$filename = basename( $file_path );
+		$mimetype = mime_content_type( $file_path ) ?: 'image/png';
+
+		// Build multipart form data manually for wp_remote_post
+		$body  = '--' . $boundary . "\r\n";
+		$body .= 'Content-Disposition: form-data; name="file"; filename="' . $filename . '"' . "\r\n";
+		$body .= 'Content-Type: ' . $mimetype . "\r\n\r\n";
+		$body .= file_get_contents( $file_path ) . "\r\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		$body .= '--' . $boundary . '--' . "\r\n";
+
+		$response = wp_remote_post( $api_url . '/api/tasks/' . $task_number . '/attachments', [
+			'headers' => [
+				'X-API-Key'    => $api_key,
+				'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+			],
+			'body'    => $body,
+			'timeout' => 30,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			error_log( 'AGoodBug - AGoodMember: Screenshot upload failed: ' . $response->get_error_message() );
+			return '';
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( $code >= 200 && $code < 300 && ! empty( $data['url'] ) ) {
+			error_log( 'AGoodBug - AGoodMember: Screenshot uploaded' );
+			return $data['url'];
+		}
+
+		error_log( 'AGoodBug - AGoodMember: Screenshot upload failed (HTTP ' . $code . ')' );
+		return '';
+	}
+
+	/**
+	 * Update task notes via API
+	 *
+	 * @param string $api_url    API base URL.
+	 * @param string $api_key    API key.
+	 * @param string $task_id    Task UUID.
+	 * @param string $notes_html HTML content for notes.
+	 */
+	private function update_task_notes( $api_url, $api_key, $task_id, $notes_html ) {
+		$response = wp_remote_request( $api_url . '/api/external/tasks/' . $task_id, [
+			'method'  => 'PATCH',
+			'headers' => [
+				'X-API-Key'    => $api_key,
+				'Content-Type' => 'application/json',
+			],
+			'body'    => wp_json_encode( [ 'notes' => $notes_html ] ),
+			'timeout' => 30,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			error_log( 'AGoodBug - AGoodMember: Notes update failed: ' . $response->get_error_message() );
+		}
+	}
+
+	/**
+	 * Build HTML notes for Tiptap rich text editor
 	 *
 	 * @param array  $data           Feedback data.
-	 * @param string $screenshot_url Screenshot URL.
-	 * @return string
+	 * @param string $screenshot_url Uploaded screenshot URL.
+	 * @return string HTML string.
 	 */
-	private function build_description( $data, $screenshot_url ) {
+	private function build_notes_html( $data, $screenshot_url ) {
 		$parts = [];
 
-		// Description
-		$parts[] = '## Beskrivning';
-		$parts[] = $data['comment'];
-		$parts[] = '';
-
-		// Environment details
-		$parts[] = '## Miljö';
-		$parts[] = '| Egenskap | Värde |';
-		$parts[] = '|----------|-------|';
-		$parts[] = '| **URL** | ' . $data['url'] . ' |';
-		$parts[] = '| **Enhet** | ' . ucfirst( $data['device_type'] ?? 'unknown' ) . ( ! empty( $data['touch_enabled'] ) ? ' (touch)' : '' ) . ' |';
-		$parts[] = '| **Skärm** | ' . ( $data['screen_resolution'] ?? 'N/A' ) . ( ! empty( $data['pixel_ratio'] ) && $data['pixel_ratio'] > 1 ? ' @' . $data['pixel_ratio'] . 'x' : '' ) . ' |';
-		$parts[] = '| **Viewport** | ' . ( $data['viewport'] ?? 'N/A' ) . ' |';
-		$parts[] = '| **Browser** | ' . ( $data['browser'] ?? 'N/A' ) . ' |';
-
-		if ( ! empty( $data['color_scheme'] ) ) {
-			$parts[] = '| **Tema** | ' . ucfirst( $data['color_scheme'] ) . ' |';
-		}
-		if ( ! empty( $data['language'] ) ) {
-			$parts[] = '| **Språk** | ' . $data['language'] . ' |';
-		}
-		if ( ! empty( $data['timezone'] ) ) {
-			$parts[] = '| **Tidszon** | ' . $data['timezone'] . ' |';
-		}
-
-		$parts[] = '';
-
-		// Reporter info
-		$user = wp_get_current_user();
-		if ( $user->ID > 0 ) {
-			$parts[] = '**Rapporterat av:** ' . $user->display_name . ' (' . $user->user_email . ')';
-		} elseif ( ! empty( $data['email'] ) ) {
-			$parts[] = '**Rapporterat av:** ' . $data['email'];
-		}
-		$parts[] = '';
+		$parts[] = '<p>🐛 <strong>Bug report från AGoodBug</strong></p>';
+		$parts[] = '<p><strong>Sida:</strong> <a href="' . esc_url( $data['url'] ) . '">' . esc_html( $data['url'] ) . '</a></p>';
+		$parts[] = '<p><strong>Kommentar:</strong> ' . esc_html( $data['comment'] ?? '' ) . '</p>';
 
 		// Screenshot
 		if ( $screenshot_url ) {
-			$parts[] = '## Skärmbild';
-			$parts[] = '![Screenshot](' . $screenshot_url . ')';
+			$parts[] = '<h2>Skärmbild</h2>';
+			$parts[] = '<img src="' . esc_url( $screenshot_url ) . '" />';
 		}
 
-		$parts[] = '';
-		$parts[] = '---';
-		$parts[] = '*Skickat via AGoodBug*';
+		// Environment
+		$parts[] = '<h2>Miljö</h2>';
+		$parts[] = '<ul>';
+		$parts[] = '<li>Webbläsare: ' . esc_html( $data['browser'] ?? 'N/A' ) . '</li>';
+		$parts[] = '<li>Enhet: ' . esc_html( ucfirst( $data['device_type'] ?? 'unknown' ) ) . '</li>';
+		$parts[] = '<li>Skärm: ' . esc_html( $data['screen_resolution'] ?? 'N/A' ) . '</li>';
+		$parts[] = '<li>Viewport: ' . esc_html( $data['viewport'] ?? 'N/A' ) . '</li>';
+
+		if ( ! empty( $data['color_scheme'] ) ) {
+			$parts[] = '<li>Tema: ' . esc_html( ucfirst( $data['color_scheme'] ) ) . '</li>';
+		}
+
+		$parts[] = '</ul>';
+
+		// Reporter
+		$user = wp_get_current_user();
+		if ( $user->ID > 0 ) {
+			$parts[] = '<p><strong>Rapporterat av:</strong> ' . esc_html( $user->display_name ) . ' (' . esc_html( $user->user_email ) . ')</p>';
+		} elseif ( ! empty( $data['email'] ) ) {
+			$parts[] = '<p><strong>Rapporterat av:</strong> ' . esc_html( $data['email'] ) . '</p>';
+		}
+
+		$parts[] = '<hr>';
+		$parts[] = '<p><em>Skickat via AGoodBug</em></p>';
 
 		return implode( "\n", $parts );
 	}

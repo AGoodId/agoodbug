@@ -539,11 +539,7 @@
 				language: deviceInfo.language,
 				timezone: deviceInfo.timezone,
 				referrer: deviceInfo.referrer,
-				cookies_enabled: deviceInfo.cookiesEnabled,
-				connection: typeof deviceInfo.connection === 'object'
-					? JSON.stringify(deviceInfo.connection)
-					: deviceInfo.connection,
-				memory: deviceInfo.memory
+				cookies_enabled: deviceInfo.cookiesEnabled
 			};
 
 			try {
@@ -644,26 +640,7 @@
 
 				// Browser capabilities
 				cookiesEnabled: navigator.cookieEnabled,
-				doNotTrack: navigator.doNotTrack === '1' || navigator.doNotTrack === 'yes',
-
-				// Connection info (if available)
-				connection: this.getConnectionInfo(),
-
-				// Memory info (if available, Chrome only)
-				memory: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'unknown'
-			};
-		}
-
-		// Get connection info (Network Information API)
-		getConnectionInfo() {
-			const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-			if (!conn) return 'unknown';
-
-			return {
-				effectiveType: conn.effectiveType || 'unknown', // 4g, 3g, 2g, slow-2g
-				downlink: conn.downlink ? `${conn.downlink} Mbps` : 'unknown',
-				rtt: conn.rtt ? `${conn.rtt} ms` : 'unknown',
-				saveData: conn.saveData || false
+				doNotTrack: navigator.doNotTrack === '1' || navigator.doNotTrack === 'yes'
 			};
 		}
 	}
