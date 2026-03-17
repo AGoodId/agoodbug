@@ -63,7 +63,7 @@ class AGoodMember {
 			$task_data['project_id'] = $project_id;
 		}
 
-		error_log( 'AGoodBug - AGoodMember: Creating task' );
+		error_log( 'AGoodBug - AGoodMember: Creating task: ' . wp_json_encode( $task_data ) );
 
 		$response = wp_remote_post( $api_url . '/api/external/tasks', [
 			'headers' => [
@@ -83,10 +83,8 @@ class AGoodMember {
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
 		if ( $code !== 201 || empty( $body['task']['task_number'] ) ) {
-			error_log( 'AGoodBug - AGoodMember: Task creation failed (HTTP ' . $code . ')' );
-			if ( ! empty( $body['error'] ) ) {
-				error_log( 'AGoodBug - AGoodMember API error: ' . $body['error'] );
-			}
+			$raw_body = wp_remote_retrieve_body( $response );
+			error_log( 'AGoodBug - AGoodMember: Task creation failed (HTTP ' . $code . '): ' . $raw_body );
 			return false;
 		}
 
