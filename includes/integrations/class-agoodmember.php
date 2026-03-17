@@ -32,7 +32,7 @@ class AGoodMember {
 		$project_id = $settings['agoodmember_project_id'] ?? '';
 
 		if ( empty( $api_key ) ) {
-			error_log( 'AGoodBug - AGoodMember: Missing API key' );
+			$this->log_error( $post_id, 'Missing API key' );
 			return false;
 		}
 
@@ -75,16 +75,24 @@ class AGoodMember {
 		] );
 
 		if ( is_wp_error( $response ) ) {
-			error_log( 'AGoodBug - AGoodMember error: ' . $response->get_error_message() );
+			$this->log_error( $post_id, 'Request failed: ' . $response->get_error_message() );
 			return false;
 		}
 
-		$code = wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$code     = wp_remote_retrieve_response_code( $response );
+		$raw_body = wp_remote_retrieve_body( $response );
+		$body     = json_decode( $raw_body, true );
 
 		if ( $code !== 201 || empty( $body['task']['task_number'] ) ) {
-			$raw_body = wp_remote_retrieve_body( $response );
-			error_log( 'AGoodBug - AGoodMember: Task creation failed (HTTP ' . $code . '): ' . $raw_body );
+			$error_msg = 'HTTP ' . $code;
+			if ( ! empty( $body['error'] ) ) {
+				$error_msg .= ': ' . $body['error'];
+			} elseif ( ! empty( $body['message'] ) ) {
+				$error_msg .= ': ' . $body['message'];
+			} else {
+				$error_msg .= ': ' . substr( $raw_body, 0, 300 );
+			}
+			$this->log_error( $post_id, $error_msg );
 			return false;
 		}
 
@@ -229,5 +237,18 @@ class AGoodMember {
 		$parts[] = '<p><em>Skickat via AGoodBug</em></p>';
 
 		return implode( "\n", $parts );
+	}
+
+	/**
+	 * Log error to post meta and error_log
+	 *
+	 * @param int    $post_id Post ID.
+	 * @param string $message Error message.
+	 */
+	private function log_error( $post_id, $message ) {
+		error_log( 'AGoodBug - AGoodMember: ' . $message );
+		if ( $post_id ) {
+			update_post_meta( $post_id, '_agoodmember_error', $message );
+		}
 	}
 }

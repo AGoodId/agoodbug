@@ -218,6 +218,18 @@ class Feedback_CPT {
 			</div>
 		<?php endif; ?>
 
+		<?php
+		$agoodmember_error = get_post_meta( $post->ID, '_agoodmember_error', true );
+		if ( $agoodmember_error ) :
+		?>
+			<div class="agoodbug-meta-row">
+				<div class="agoodbug-meta-label" style="color: #d63638;"><?php esc_html_e( 'AGoodMember Error', 'agoodbug' ); ?></div>
+				<div class="agoodbug-meta-value" style="color: #d63638; font-size: 12px;">
+					<?php echo esc_html( $agoodmember_error ); ?>
+				</div>
+			</div>
+		<?php endif; ?>
+
 		<!-- Device Information Section -->
 		<div class="agoodbug-meta-section">
 			<div class="agoodbug-meta-section-title"><?php esc_html_e( 'Device Information', 'agoodbug' ); ?></div>
