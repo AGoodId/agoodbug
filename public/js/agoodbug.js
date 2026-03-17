@@ -377,7 +377,7 @@
 
 				const proxyResponse = await fetch(
 					config.proxyUrl + '?url=' + encodeURIComponent(url) + '&responseType=text',
-					{ credentials: 'omit' }
+					{ credentials: 'same-origin' }
 				);
 
 				if (!proxyResponse.ok) {
