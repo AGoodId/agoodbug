@@ -19,6 +19,7 @@ class Settings {
 	 */
 	public function init() {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
+		add_action( 'wp_ajax_agoodbug_test_agoodmember', [ $this, 'ajax_test_agoodmember' ] );
 	}
 
 	/**
@@ -225,6 +226,104 @@ class Settings {
 	 */
 	public function render_agoodmember_section() {
 		echo '<p>' . esc_html__( 'Send bug reports as tasks to AGoodMember.', 'agoodbug' ) . '</p>';
+		?>
+		<p>
+			<button type="button" class="button" id="agoodbug-test-agoodmember">
+				<?php esc_html_e( 'Testa anslutning', 'agoodbug' ); ?>
+			</button>
+			<span id="agoodbug-test-agoodmember-result" style="margin-left: 8px;"></span>
+		</p>
+		<script>
+		document.getElementById('agoodbug-test-agoodmember').addEventListener('click', function() {
+			var btn = this;
+			var result = document.getElementById('agoodbug-test-agoodmember-result');
+			btn.disabled = true;
+			result.textContent = '<?php echo esc_js( __( 'Testar…', 'agoodbug' ) ); ?>';
+			result.style.color = '#666';
+
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: 'action=agoodbug_test_agoodmember&_wpnonce=<?php echo esc_js( wp_create_nonce( 'agoodbug_test_agoodmember' ) ); ?>'
+			})
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				result.textContent = data.data;
+				result.style.color = data.success ? '#00a32a' : '#d63638';
+				btn.disabled = false;
+			})
+			.catch(function() {
+				result.textContent = '<?php echo esc_js( __( 'Nätverksfel', 'agoodbug' ) ); ?>';
+				result.style.color = '#d63638';
+				btn.disabled = false;
+			});
+		});
+		</script>
+		<?php
+	}
+
+	/**
+	 * AJAX handler to test AGoodMember connection
+	 */
+	public function ajax_test_agoodmember() {
+		check_ajax_referer( 'agoodbug_test_agoodmember' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'Behörighet saknas.', 'agoodbug' ) );
+		}
+
+		$settings   = get_option( self::OPTION_NAME, $this->get_defaults() );
+		$api_key    = $settings['agoodmember_token'] ?? '';
+		$project_id = $settings['agoodmember_project_id'] ?? '';
+
+		if ( empty( $api_key ) ) {
+			wp_send_json_error( __( 'API-nyckel saknas.', 'agoodbug' ) );
+		}
+
+		// Test the API key by fetching tasks (limit 1)
+		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks?limit=1', [
+			'headers' => [
+				'X-API-Key' => $api_key,
+			],
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( $response->get_error_message() );
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+
+		if ( $code === 401 || $code === 403 ) {
+			wp_send_json_error( __( 'Ogiltig API-nyckel.', 'agoodbug' ) );
+		}
+
+		if ( $code < 200 || $code >= 300 ) {
+			/* translators: %d: HTTP status code */
+			wp_send_json_error( sprintf( __( 'API svarade med HTTP %d.', 'agoodbug' ), $code ) );
+		}
+
+		$message = __( 'Anslutningen fungerar!', 'agoodbug' );
+
+		// If project is configured, verify it exists
+		if ( ! empty( $project_id ) ) {
+			$project_response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks?project_id=' . $project_id . '&limit=1', [
+				'headers' => [
+					'X-API-Key' => $api_key,
+				],
+				'timeout' => 15,
+			] );
+
+			$project_code = wp_remote_retrieve_response_code( $project_response );
+
+			if ( $project_code >= 200 && $project_code < 300 ) {
+				$message = __( 'Anslutningen fungerar! Projektet hittades.', 'agoodbug' );
+			} else {
+				$message = __( 'API-nyckeln fungerar, men projektet kunde inte verifieras.', 'agoodbug' );
+			}
+		}
+
+		wp_send_json_success( $message );
 	}
 
 	/**
