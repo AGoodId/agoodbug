@@ -33,7 +33,7 @@ class REST_API {
 		register_rest_route( self::NAMESPACE, '/proxy', [
 			'methods'             => 'GET',
 			'callback'            => [ $this, 'proxy_image' ],
-			'permission_callback' => [ $this, 'check_permissions' ],
+			'permission_callback' => '__return_true', // Public: only proxies images, validates content-type
 			'args'                => [
 				'url' => [
 					'type'              => 'string',
