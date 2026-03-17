@@ -367,44 +367,86 @@
 			await this.captureScreenshot();
 		}
 
+		// Proxy a single image URL, returns data URL or null
+		async proxyImageUrl(url) {
+			if (!url || url.startsWith('data:') || url.startsWith('blob:')) return null;
+
+			try {
+				const imgUrl = new URL(url);
+				if (imgUrl.origin === window.location.origin) return null;
+
+				const proxyResponse = await fetch(
+					config.proxyUrl + '?url=' + encodeURIComponent(url) + '&responseType=text',
+					{ credentials: 'omit' }
+				);
+
+				if (!proxyResponse.ok) {
+					console.warn('AGoodBug proxy failed for', url, proxyResponse.status);
+					return null;
+				}
+
+				const base64 = await proxyResponse.text();
+				// Detect MIME type from URL extension
+				const ext = url.split('?')[0].split('.').pop().toLowerCase();
+				const mimeTypes = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
+				const mime = mimeTypes[ext] || 'image/jpeg';
+				return 'data:' + mime + ';base64,' + base64;
+			} catch (e) {
+				console.warn('AGoodBug proxy error for', url, e);
+				return null;
+			}
+		}
+
 		// Replace cross-origin images with data URLs via proxy
 		async proxyCrossOriginImages() {
 			if (!config.proxyUrl) return [];
 
-			const images = document.querySelectorAll('img');
-			const pageOrigin = window.location.origin;
 			const restored = [];
 
-			const promises = Array.from(images).map(async (img) => {
-				if (!img.src || img.src.startsWith('data:') || img.src.startsWith('blob:')) return;
-
-				try {
-					const imgUrl = new URL(img.src);
-					if (imgUrl.origin === pageOrigin) return;
-
-					const proxyResponse = await fetch(
-						config.proxyUrl + '?url=' + encodeURIComponent(img.src) + '&responseType=text',
-						{ credentials: 'omit' }
-					);
-					if (!proxyResponse.ok) return;
-
-					const base64 = await proxyResponse.text();
+			// Handle <img> elements (use currentSrc for srcset support)
+			const imgPromises = Array.from(document.querySelectorAll('img')).map(async (img) => {
+				const actualSrc = img.currentSrc || img.src;
+				const dataUrl = await this.proxyImageUrl(actualSrc);
+				if (dataUrl) {
 					const originalSrc = img.src;
-					img.src = 'data:image/png;base64,' + base64;
-					restored.push({ img, originalSrc });
-				} catch (e) {
-					// Skip images that fail
+					const originalSrcset = img.srcset;
+					img.srcset = '';
+					img.src = dataUrl;
+					restored.push({ el: img, originalSrc, originalSrcset });
 				}
 			});
 
-			await Promise.all(promises);
+			// Handle CSS background-image
+			const bgElements = document.querySelectorAll('*');
+			const bgPromises = Array.from(bgElements).map(async (el) => {
+				const bg = getComputedStyle(el).backgroundImage;
+				if (!bg || bg === 'none') return;
+
+				const match = bg.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/);
+				if (!match) return;
+
+				const dataUrl = await this.proxyImageUrl(match[1]);
+				if (dataUrl) {
+					const originalBg = el.style.backgroundImage;
+					el.style.backgroundImage = 'url(' + dataUrl + ')';
+					restored.push({ el, originalBg, isBg: true });
+				}
+			});
+
+			await Promise.all([...imgPromises, ...bgPromises]);
+			console.log('AGoodBug: proxied', restored.length, 'cross-origin images');
 			return restored;
 		}
 
 		// Restore original image sources
 		restoreImages(restored) {
-			for (const { img, originalSrc } of restored) {
-				img.src = originalSrc;
+			for (const item of restored) {
+				if (item.isBg) {
+					item.el.style.backgroundImage = item.originalBg;
+				} else {
+					item.el.srcset = item.originalSrcset || '';
+					item.el.src = item.originalSrc;
+				}
 			}
 		}
 
