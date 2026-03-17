@@ -367,6 +367,47 @@
 			await this.captureScreenshot();
 		}
 
+		// Replace cross-origin images with data URLs via proxy
+		async proxyCrossOriginImages() {
+			if (!config.proxyUrl) return [];
+
+			const images = document.querySelectorAll('img');
+			const pageOrigin = window.location.origin;
+			const restored = [];
+
+			const promises = Array.from(images).map(async (img) => {
+				if (!img.src || img.src.startsWith('data:') || img.src.startsWith('blob:')) return;
+
+				try {
+					const imgUrl = new URL(img.src);
+					if (imgUrl.origin === pageOrigin) return;
+
+					const proxyResponse = await fetch(
+						config.proxyUrl + '?url=' + encodeURIComponent(img.src) + '&responseType=text',
+						{ credentials: 'omit' }
+					);
+					if (!proxyResponse.ok) return;
+
+					const base64 = await proxyResponse.text();
+					const originalSrc = img.src;
+					img.src = 'data:image/png;base64,' + base64;
+					restored.push({ img, originalSrc });
+				} catch (e) {
+					// Skip images that fail
+				}
+			});
+
+			await Promise.all(promises);
+			return restored;
+		}
+
+		// Restore original image sources
+		restoreImages(restored) {
+			for (const { img, originalSrc } of restored) {
+				img.src = originalSrc;
+			}
+		}
+
 		// Capture screenshot
 		async captureScreenshot() {
 			try {
@@ -376,14 +417,19 @@
 				// Wait for UI to update
 				await new Promise(r => setTimeout(r, 100));
 
+				// Replace cross-origin images with proxied data URLs
+				const restored = await this.proxyCrossOriginImages();
+
 				// Capture with html2canvas
 				const canvas = await html2canvas(document.body, {
 					useCORS: true,
 					allowTaint: false,
-					proxy: config.proxyUrl || null,
 					scale: window.devicePixelRatio || 1,
 					logging: false,
 				});
+
+				// Restore original image sources
+				this.restoreImages(restored);
 
 				// Calculate selection in canvas coordinates
 				const { startX, startY, endX, endY } = this.selection;
