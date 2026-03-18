@@ -23,6 +23,9 @@ class Feedback_CPT {
 		add_action( 'add_meta_boxes', [ $this, 'add_meta_boxes' ] );
 		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', [ $this, 'add_columns' ] );
 		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', [ $this, 'render_columns' ], 10, 2 );
+		add_filter( 'post_row_actions', [ $this, 'add_row_actions' ], 10, 2 );
+		add_action( 'wp_ajax_agoodbug_resend', [ $this, 'ajax_resend' ] );
+		add_action( 'admin_notices', [ $this, 'resend_admin_notice' ] );
 	}
 
 	/**
@@ -382,6 +385,161 @@ class Feedback_CPT {
 				echo esc_html( $name );
 				break;
 		}
+	}
+
+	/**
+	 * Add resend row action to bug report list
+	 *
+	 * @param array    $actions Row actions.
+	 * @param \WP_Post $post    Post object.
+	 * @return array
+	 */
+	public function add_row_actions( $actions, $post ) {
+		if ( $post->post_type !== self::POST_TYPE ) {
+			return $actions;
+		}
+
+		$resend_url = wp_nonce_url(
+			admin_url( 'admin-ajax.php?action=agoodbug_resend&post_id=' . $post->ID ),
+			'agoodbug_resend_' . $post->ID
+		);
+
+		$actions['resend'] = sprintf(
+			'<a href="%s" onclick="return confirm(\'%s\');">%s</a>',
+			esc_url( $resend_url ),
+			esc_js( __( 'Resend this bug report to all enabled integrations?', 'agoodbug' ) ),
+			__( 'Resend', 'agoodbug' )
+		);
+
+		return $actions;
+	}
+
+	/**
+	 * AJAX handler for resending a bug report to integrations
+	 */
+	public function ajax_resend() {
+		$post_id = absint( $_GET['post_id'] ?? 0 );
+
+		if ( ! $post_id || ! check_admin_referer( 'agoodbug_resend_' . $post_id ) ) {
+			wp_die( __( 'Invalid request.', 'agoodbug' ) );
+		}
+
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			wp_die( __( 'Permission denied.', 'agoodbug' ) );
+		}
+
+		$post = get_post( $post_id );
+		if ( ! $post || $post->post_type !== self::POST_TYPE ) {
+			wp_die( __( 'Invalid bug report.', 'agoodbug' ) );
+		}
+
+		// Reconstruct feedback data from post meta
+		$data = [
+			'feedback_type'     => get_post_meta( $post_id, '_feedback_type', true ) ?: 'screenshot',
+			'url'               => get_post_meta( $post_id, '_page_url', true ),
+			'comment'           => $post->post_content,
+			'email'             => get_post_meta( $post_id, '_reporter_email', true ),
+			'selection'         => get_post_meta( $post_id, '_selection_coords', true ),
+			'viewport'          => get_post_meta( $post_id, '_viewport', true ),
+			'browser'           => get_post_meta( $post_id, '_browser_info', true ),
+			'device_type'       => get_post_meta( $post_id, '_device_type', true ),
+			'screen_resolution' => get_post_meta( $post_id, '_screen_resolution', true ),
+			'pixel_ratio'       => get_post_meta( $post_id, '_pixel_ratio', true ),
+			'color_depth'       => get_post_meta( $post_id, '_color_depth', true ),
+			'touch_enabled'     => get_post_meta( $post_id, '_touch_enabled', true ),
+			'color_scheme'      => get_post_meta( $post_id, '_color_scheme', true ),
+			'language'          => get_post_meta( $post_id, '_language', true ),
+			'timezone'          => get_post_meta( $post_id, '_timezone', true ),
+			'referrer'          => get_post_meta( $post_id, '_referrer', true ),
+			'cookies_enabled'   => get_post_meta( $post_id, '_cookies_enabled', true ),
+		];
+
+		// Get screenshot URL
+		$screenshot_id  = get_post_meta( $post_id, '_screenshot_id', true );
+		$screenshot_url = $screenshot_id ? wp_get_attachment_url( $screenshot_id ) : '';
+
+		$settings     = Plugin::get_settings();
+		$destinations = $settings['destinations'] ?? [ 'cpt' ];
+		$results      = [ 'cpt' => true ];
+
+		// Send to email
+		if ( in_array( 'email', $destinations, true ) ) {
+			try {
+				$email = new Integrations\Email();
+				$results['email'] = $email->send( $data, $screenshot_url, $post_id );
+			} catch ( \Exception $e ) {
+				$results['email'] = false;
+				error_log( 'AGoodBug - Resend email error: ' . $e->getMessage() );
+			}
+		}
+
+		// Send to Checkvist
+		if ( in_array( 'checkvist', $destinations, true ) && ! empty( $settings['checkvist_enabled'] ) ) {
+			try {
+				$checkvist = new Integrations\Checkvist();
+				$results['checkvist'] = $checkvist->send( $data, $screenshot_url, $post_id );
+			} catch ( \Exception $e ) {
+				$results['checkvist'] = false;
+				error_log( 'AGoodBug - Resend Checkvist error: ' . $e->getMessage() );
+			}
+		}
+
+		// Send to AGoodMember
+		if ( in_array( 'agoodmember', $destinations, true ) && ! empty( $settings['agoodmember_enabled'] ) ) {
+			try {
+				// Clear previous error
+				delete_post_meta( $post_id, '_agoodmember_error' );
+				$agoodmember = new Integrations\AGoodMember();
+				$results['agoodmember'] = $agoodmember->send( $data, $screenshot_url, $post_id );
+			} catch ( \Exception $e ) {
+				$results['agoodmember'] = false;
+				error_log( 'AGoodBug - Resend AGoodMember error: ' . $e->getMessage() );
+			}
+		}
+
+		// Update destination results
+		update_post_meta( $post_id, '_destination_results', wp_json_encode( $results ) );
+
+		// Build notice message
+		$successes = array_filter( $results, function ( $v ) { return $v && $v !== false; } );
+		$failures  = array_filter( $results, function ( $v ) { return $v === false; } );
+
+		$message = sprintf(
+			__( 'Resent bug report #%d.', 'agoodbug' ),
+			$post_id
+		);
+
+		if ( ! empty( $successes ) ) {
+			$message .= ' ' . sprintf( __( 'Success: %s.', 'agoodbug' ), implode( ', ', array_keys( $successes ) ) );
+		}
+		if ( ! empty( $failures ) ) {
+			$message .= ' ' . sprintf( __( 'Failed: %s.', 'agoodbug' ), implode( ', ', array_keys( $failures ) ) );
+		}
+
+		// Redirect back to list with notice
+		set_transient( 'agoodbug_resend_notice_' . get_current_user_id(), $message, 30 );
+
+		wp_safe_redirect( admin_url( 'edit.php?post_type=' . self::POST_TYPE ) );
+		exit;
+	}
+
+	/**
+	 * Show admin notice after resend
+	 */
+	public function resend_admin_notice() {
+		$notice = get_transient( 'agoodbug_resend_notice_' . get_current_user_id() );
+		if ( ! $notice ) {
+			return;
+		}
+		delete_transient( 'agoodbug_resend_notice_' . get_current_user_id() );
+
+		$has_failure = strpos( $notice, 'Failed:' ) !== false;
+		$class = $has_failure ? 'notice-warning' : 'notice-success';
+		?>
+		<div class="notice <?php echo esc_attr( $class ); ?> is-dismissible">
+			<p><?php echo esc_html( $notice ); ?></p>
+		</div>
+		<?php
 	}
 
 	/**
