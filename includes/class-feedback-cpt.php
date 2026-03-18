@@ -21,6 +21,7 @@ class Feedback_CPT {
 		add_action( 'init', [ $this, 'register_post_type' ] );
 		add_action( 'init', [ $this, 'register_meta' ] );
 		add_action( 'add_meta_boxes', [ $this, 'add_meta_boxes' ] );
+		add_filter( 'use_block_editor_for_post_type', [ $this, 'disable_block_editor' ], 10, 2 );
 		add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', [ $this, 'add_columns' ] );
 		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', [ $this, 'render_columns' ], 10, 2 );
 		add_filter( 'post_row_actions', [ $this, 'add_row_actions' ], 10, 2 );
@@ -67,11 +68,28 @@ class Feedback_CPT {
 	}
 
 	/**
+	 * Disable Gutenberg for bug reports.
+	 *
+	 * @param bool   $use_block_editor Current editor state.
+	 * @param string $post_type        Post type slug.
+	 * @return bool
+	 */
+	public function disable_block_editor( $use_block_editor, $post_type ) {
+		if ( self::POST_TYPE === $post_type ) {
+			return false;
+		}
+
+		return $use_block_editor;
+	}
+
+	/**
 	 * Register meta fields
 	 */
 	public function register_meta() {
 		$meta_fields = [
 			'_screenshot_id'       => 'integer',
+			'_screenshot_url'      => 'string',
+			'_screenshot_path'     => 'string',
 			'_feedback_type'       => 'string',
 			'_page_url'            => 'string',
 			'_selection_coords'    => 'string',
@@ -128,6 +146,14 @@ class Feedback_CPT {
 			'high'
 		);
 
+		add_meta_box(
+			'agoodbug_screenshot',
+			__( 'Screenshot', 'agoodbug' ),
+			[ $this, 'render_screenshot_meta_box' ],
+			self::POST_TYPE,
+			'normal',
+			'high'
+		);
 	}
 
 	/**
@@ -169,19 +195,6 @@ class Feedback_CPT {
 			.agoodbug-device-badge--dark { background: #343a40; color: #fff; }
 			.agoodbug-device-badge--light { background: #f8f9fa; color: #212529; border: 1px solid #dee2e6; }
 		</style>
-
-		<?php
-		$screenshot_id = get_post_meta( $post->ID, '_screenshot_id', true );
-		if ( $screenshot_id ) :
-			$image_url = wp_get_attachment_url( $screenshot_id );
-			if ( $image_url ) :
-		?>
-			<div class="agoodbug-meta-row">
-				<a href="<?php echo esc_url( $image_url ); ?>" target="_blank">
-					<img src="<?php echo esc_url( $image_url ); ?>" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" alt="Screenshot" />
-				</a>
-			</div>
-		<?php endif; endif; ?>
 
 		<?php if ( $page_url ) : ?>
 			<div class="agoodbug-meta-row">
@@ -327,20 +340,42 @@ class Feedback_CPT {
 	 * @param \WP_Post $post Post object.
 	 */
 	public function render_screenshot_meta_box( $post ) {
-		$screenshot_id = get_post_meta( $post->ID, '_screenshot_id', true );
+		$image_url = self::get_screenshot_url( $post->ID );
 
-		if ( $screenshot_id ) {
-			$image_url = wp_get_attachment_url( $screenshot_id );
-			if ( $image_url ) {
-				?>
-				<a href="<?php echo esc_url( $image_url ); ?>" target="_blank">
-					<img src="<?php echo esc_url( $image_url ); ?>" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
-				</a>
-				<?php
-			}
+		if ( $image_url ) {
+			?>
+			<a href="<?php echo esc_url( $image_url ); ?>" target="_blank">
+				<img src="<?php echo esc_url( $image_url ); ?>" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
+			</a>
+			<?php
 		} else {
 			echo '<p>' . esc_html__( 'No screenshot attached.', 'agoodbug' ) . '</p>';
 		}
+	}
+
+	/**
+	 * Get the screenshot URL for a feedback post.
+	 *
+	 * Supports both the new direct URL storage and legacy attachment-based reports.
+	 *
+	 * @param int $post_id Feedback post ID.
+	 * @return string
+	 */
+	public static function get_screenshot_url( $post_id ) {
+		$screenshot_url = get_post_meta( $post_id, '_screenshot_url', true );
+		if ( ! empty( $screenshot_url ) ) {
+			return esc_url_raw( $screenshot_url );
+		}
+
+		$screenshot_id = (int) get_post_meta( $post_id, '_screenshot_id', true );
+		if ( $screenshot_id ) {
+			$attachment_url = wp_get_attachment_url( $screenshot_id );
+			if ( $attachment_url ) {
+				return esc_url_raw( $attachment_url );
+			}
+		}
+
+		return '';
 	}
 
 	/**
@@ -455,8 +490,7 @@ class Feedback_CPT {
 		];
 
 		// Get screenshot URL
-		$screenshot_id  = get_post_meta( $post_id, '_screenshot_id', true );
-		$screenshot_url = $screenshot_id ? wp_get_attachment_url( $screenshot_id ) : '';
+		$screenshot_url = self::get_screenshot_url( $post_id );
 
 		$settings     = Plugin::get_settings();
 		$destinations = $settings['destinations'] ?? [ 'cpt' ];
@@ -609,9 +643,11 @@ class Feedback_CPT {
 
 		// Handle screenshot
 		if ( ! empty( $data['screenshot'] ) ) {
-			$screenshot_id = self::save_screenshot( $data['screenshot'], $post_id );
-			if ( $screenshot_id && ! is_wp_error( $screenshot_id ) ) {
-				update_post_meta( $post_id, '_screenshot_id', $screenshot_id );
+			$screenshot = self::save_screenshot( $data['screenshot'], $post_id );
+			if ( $screenshot && ! is_wp_error( $screenshot ) ) {
+				update_post_meta( $post_id, '_screenshot_url', esc_url_raw( $screenshot['url'] ) );
+				update_post_meta( $post_id, '_screenshot_path', sanitize_text_field( $screenshot['file'] ) );
+				delete_post_meta( $post_id, '_screenshot_id' );
 			}
 		}
 
@@ -619,11 +655,11 @@ class Feedback_CPT {
 	}
 
 	/**
-	 * Save base64 screenshot as attachment
+	 * Save base64 screenshot as a plain uploaded file.
 	 *
 	 * @param string $base64_data Base64 encoded image data.
 	 * @param int    $post_id     Parent post ID.
-	 * @return int|\WP_Error Attachment ID or error.
+	 * @return array<string,string>|\WP_Error File info or error.
 	 */
 	private static function save_screenshot( $base64_data, $post_id ) {
 		// Extract the base64 data
@@ -655,25 +691,9 @@ class Feedback_CPT {
 			return new \WP_Error( 'upload_failed', $upload['error'] );
 		}
 
-		// Create attachment
-		$attachment = [
-			'post_mime_type' => 'image/png',
-			'post_title'     => sanitize_file_name( $filename ),
-			'post_content'   => '',
-			'post_status'    => 'inherit',
+		return [
+			'file' => $upload['file'],
+			'url'  => $upload['url'],
 		];
-
-		$attachment_id = wp_insert_attachment( $attachment, $upload['file'], $post_id );
-
-		if ( is_wp_error( $attachment_id ) ) {
-			return $attachment_id;
-		}
-
-		// Generate metadata
-		require_once ABSPATH . 'wp-admin/includes/image.php';
-		$metadata = wp_generate_attachment_metadata( $attachment_id, $upload['file'] );
-		wp_update_attachment_metadata( $attachment_id, $metadata );
-
-		return $attachment_id;
 	}
 }

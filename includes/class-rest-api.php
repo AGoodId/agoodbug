@@ -325,8 +325,7 @@ class REST_API {
 			$results['cpt'] = true;
 
 			// Get screenshot URL for integrations
-			$screenshot_id  = get_post_meta( $post_id, '_screenshot_id', true );
-			$screenshot_url = $screenshot_id ? wp_get_attachment_url( $screenshot_id ) : '';
+			$screenshot_url = Feedback_CPT::get_screenshot_url( $post_id );
 
 			// Send to email (wrapped in try-catch)
 			if ( in_array( 'email', $destinations, true ) ) {

@@ -21,9 +21,10 @@ class Admin_Page {
 	 * Add menu page
 	 */
 	public function add_menu_page() {
-		add_options_page(
+		add_submenu_page(
+			'edit.php?post_type=' . Feedback_CPT::POST_TYPE,
 			__( 'AGoodBug Settings', 'agoodbug' ),
-			__( 'AGoodBug', 'agoodbug' ),
+			__( 'Settings', 'agoodbug' ),
 			'manage_options',
 			'agoodbug',
 			[ $this, 'render_page' ]
@@ -36,7 +37,7 @@ class Admin_Page {
 	 * @param string $hook Current admin page.
 	 */
 	public function enqueue_assets( $hook ) {
-		if ( $hook !== 'settings_page_agoodbug' ) {
+		if ( $hook !== 'agoodbug_feedback_page_agoodbug' ) {
 			return;
 		}
 
