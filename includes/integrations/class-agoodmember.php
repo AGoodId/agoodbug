@@ -47,23 +47,26 @@ class AGoodMember {
 			$title = sprintf( '%s: %s', $title_prefix, wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/' );
 		}
 
-		// Step 1: Create the task
+		// Build notes HTML
+		$notes_html = $this->build_notes_html( $data, $screenshot_url );
+
+		// Create task with notes in a single POST
 		$task_data = [
-			'title'      => $title,
-			'type'       => 'bug',
-			'status'     => 'ska göras',
-			'priority'   => 'medel',
-			'due_date'   => wp_date( 'Y-m-d' ),
-			'tags'       => [ 'agoodbug', 'frontend' ],
-			'source'     => 'agoodbug',
-			'source_url' => $data['url'] ?? '',
+			'title'       => $title,
+			'description' => sprintf( 'Källa: %s', $data['url'] ?? '' ),
+			'notes'       => $notes_html,
+			'type'        => 'bug',
+			'status'      => 'ska göras',
+			'priority'    => 'medel',
+			'due_date'    => wp_date( 'Y-m-d' ),
+			'tags'        => [ 'agoodbug', 'frontend' ],
+			'source'      => 'agoodbug',
+			'source_url'  => $data['url'] ?? '',
 		];
 
 		if ( ! empty( $project_id ) ) {
 			$task_data['project_id'] = $project_id;
 		}
-
-		error_log( 'AGoodBug - AGoodMember: Creating task: ' . wp_json_encode( $task_data ) );
 
 		$response = wp_remote_post( $api_url . '/api/external/tasks', [
 			'headers' => [
@@ -97,119 +100,16 @@ class AGoodMember {
 		}
 
 		$task_number = $body['task']['task_number'];
-		$task_id     = $body['task']['id']; // UUID for internal API
-		error_log( 'AGoodBug - AGoodMember: Task created #' . $task_number );
-
-		// Step 2: Upload screenshot if available
-		$uploaded_screenshot_url = '';
-		$screenshot_id           = get_post_meta( $post_id, '_screenshot_id', true );
-
-		if ( $screenshot_id ) {
-			$file_path = get_attached_file( $screenshot_id );
-
-			if ( $file_path && file_exists( $file_path ) ) {
-				$uploaded_screenshot_url = $this->upload_attachment( $api_url, $api_key, $task_number, $file_path );
-			}
-		}
-
-		// Step 3: Build HTML notes and update task (uses UUID via internal API)
-		$notes_html = $this->build_notes_html( $data, $uploaded_screenshot_url );
-
-		$this->update_task_notes( $api_url, $api_key, $task_id, $notes_html, $post_id );
+		error_log( 'AGoodBug - AGoodMember: Task created #' . $task_number . ' with notes' );
 
 		return '#' . $task_number;
-	}
-
-	/**
-	 * Upload screenshot to AGoodMember task attachments
-	 *
-	 * @param string $api_url     API base URL.
-	 * @param string $api_key     API key.
-	 * @param int    $task_number Task number.
-	 * @param string $file_path   Local file path.
-	 * @return string Uploaded file URL or empty string on failure.
-	 */
-	private function upload_attachment( $api_url, $api_key, $task_number, $file_path ) {
-		$boundary = wp_generate_password( 24, false );
-		$filename = basename( $file_path );
-		$mimetype = mime_content_type( $file_path ) ?: 'image/png';
-
-		// Build multipart form data manually for wp_remote_post
-		$body  = '--' . $boundary . "\r\n";
-		$body .= 'Content-Disposition: form-data; name="file"; filename="' . $filename . '"' . "\r\n";
-		$body .= 'Content-Type: ' . $mimetype . "\r\n\r\n";
-		$body .= file_get_contents( $file_path ) . "\r\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-		$body .= '--' . $boundary . '--' . "\r\n";
-
-		$response = wp_remote_post( $api_url . '/api/tasks/' . $task_number . '/attachments', [
-			'headers' => [
-				'X-API-Key'    => $api_key,
-				'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
-			],
-			'body'    => $body,
-			'timeout' => 30,
-		] );
-
-		if ( is_wp_error( $response ) ) {
-			error_log( 'AGoodBug - AGoodMember: Screenshot upload failed: ' . $response->get_error_message() );
-			return '';
-		}
-
-		$code = wp_remote_retrieve_response_code( $response );
-		$data = json_decode( wp_remote_retrieve_body( $response ), true );
-
-		if ( $code >= 200 && $code < 300 && ! empty( $data['url'] ) ) {
-			error_log( 'AGoodBug - AGoodMember: Screenshot uploaded' );
-			return $data['url'];
-		}
-
-		error_log( 'AGoodBug - AGoodMember: Screenshot upload failed (HTTP ' . $code . ')' );
-		return '';
-	}
-
-	/**
-	 * Update task notes via API
-	 *
-	 * @param string $api_url    API base URL.
-	 * @param string $api_key    API key.
-	 * @param string $task_id    Task UUID.
-	 * @param string $notes_html HTML content for notes.
-	 */
-	private function update_task_notes( $api_url, $api_key, $task_id, $notes_html, $post_id = 0 ) {
-		$url = $api_url . '/api/external/tasks/' . $task_id;
-		error_log( 'AGoodBug - AGoodMember: PATCH notes to ' . $url );
-
-		$response = wp_remote_request( $url, [
-			'method'  => 'PATCH',
-			'headers' => [
-				'X-API-Key'    => $api_key,
-				'Content-Type' => 'application/json',
-			],
-			'body'    => wp_json_encode( [ 'notes' => $notes_html ] ),
-			'timeout' => 30,
-		] );
-
-		if ( is_wp_error( $response ) ) {
-			$msg = 'Notes PATCH failed: ' . $response->get_error_message();
-			error_log( 'AGoodBug - AGoodMember: ' . $msg );
-			$this->log_error( $post_id, $msg );
-			return;
-		}
-
-		$code     = wp_remote_retrieve_response_code( $response );
-		$raw_body = wp_remote_retrieve_body( $response );
-		error_log( 'AGoodBug - AGoodMember: PATCH response HTTP ' . $code . ': ' . substr( $raw_body, 0, 300 ) );
-
-		if ( $code < 200 || $code >= 300 ) {
-			$this->log_error( $post_id, 'Notes PATCH HTTP ' . $code . ': ' . substr( $raw_body, 0, 200 ) );
-		}
 	}
 
 	/**
 	 * Build HTML notes for Tiptap rich text editor
 	 *
 	 * @param array  $data           Feedback data.
-	 * @param string $screenshot_url Uploaded screenshot URL.
+	 * @param string $screenshot_url Screenshot URL.
 	 * @return string HTML string.
 	 */
 	private function build_notes_html( $data, $screenshot_url ) {
