@@ -115,7 +115,7 @@ class AGoodMember {
 		// Step 3: Build HTML notes and update task (uses UUID via internal API)
 		$notes_html = $this->build_notes_html( $data, $uploaded_screenshot_url );
 
-		$this->update_task_notes( $api_url, $api_key, $task_id, $notes_html );
+		$this->update_task_notes( $api_url, $api_key, $task_id, $notes_html, $post_id );
 
 		return '#' . $task_number;
 	}
@@ -175,8 +175,11 @@ class AGoodMember {
 	 * @param string $task_id    Task UUID.
 	 * @param string $notes_html HTML content for notes.
 	 */
-	private function update_task_notes( $api_url, $api_key, $task_id, $notes_html ) {
-		$response = wp_remote_request( $api_url . '/api/external/tasks/' . $task_id, [
+	private function update_task_notes( $api_url, $api_key, $task_id, $notes_html, $post_id = 0 ) {
+		$url = $api_url . '/api/external/tasks/' . $task_id;
+		error_log( 'AGoodBug - AGoodMember: PATCH notes to ' . $url );
+
+		$response = wp_remote_request( $url, [
 			'method'  => 'PATCH',
 			'headers' => [
 				'X-API-Key'    => $api_key,
@@ -187,7 +190,18 @@ class AGoodMember {
 		] );
 
 		if ( is_wp_error( $response ) ) {
-			error_log( 'AGoodBug - AGoodMember: Notes update failed: ' . $response->get_error_message() );
+			$msg = 'Notes PATCH failed: ' . $response->get_error_message();
+			error_log( 'AGoodBug - AGoodMember: ' . $msg );
+			$this->log_error( $post_id, $msg );
+			return;
+		}
+
+		$code     = wp_remote_retrieve_response_code( $response );
+		$raw_body = wp_remote_retrieve_body( $response );
+		error_log( 'AGoodBug - AGoodMember: PATCH response HTTP ' . $code . ': ' . substr( $raw_body, 0, 300 ) );
+
+		if ( $code < 200 || $code >= 300 ) {
+			$this->log_error( $post_id, 'Notes PATCH HTTP ' . $code . ': ' . substr( $raw_body, 0, 200 ) );
 		}
 	}
 
