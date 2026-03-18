@@ -3,7 +3,7 @@
  * Plugin Name: AGoodBug
  * Plugin URI: https://github.com/AGoodId/agoodbug
  * Description: Visual feedback and bug reporting widget with screenshot capture.
- * Version: 1.7.0
+ * Version: 1.7.1
  * Author: AGoodId
  * Author URI: https://agoodid.se
  * License: GPL-2.0+
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'AGOODBUG_VERSION', '1.7.0' );
+define( 'AGOODBUG_VERSION', '1.7.1' );
 define( 'AGOODBUG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -101,9 +101,9 @@ add_action( 'plugins_loaded', __NAMESPACE__ . '\\init' );
 function activate() {
 	// Create default options
 	$defaults = [
-		'enabled'            => true,
-		'roles'              => [ 'administrator', 'editor' ],
-		'destinations'       => [ 'cpt', 'email' ],
+		'enabled'                => true,
+		'roles'                  => [ 'administrator', 'editor' ],
+		'destinations'           => [ 'cpt', 'email' ],
 		'email_recipients'       => get_option( 'admin_email' ),
 		'checkvist_enabled'      => false,
 		'checkvist_username'     => '',
@@ -113,7 +113,7 @@ function activate() {
 		'agoodmember_token'      => '',
 		'agoodmember_project_id' => '',
 		'rate_limit'             => 10,
-		'max_screenshot_size' => 5 * 1024 * 1024, // 5MB
+		'max_screenshot_size'    => 5 * 1024 * 1024, // 5MB
 	];
 
 	if ( ! get_option( 'agoodbug_settings' ) ) {
