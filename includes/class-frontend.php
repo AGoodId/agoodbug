@@ -30,6 +30,11 @@ class Frontend {
 	private function should_show_widget() {
 		$settings = Plugin::get_settings();
 
+		// Don't show in admin unless explicitly enabled
+		if ( is_admin() && empty( $settings['show_in_admin'] ) ) {
+			return false;
+		}
+
 		// Check if anonymous users are allowed
 		if ( ! empty( $settings['allow_anonymous'] ) ) {
 			return true;

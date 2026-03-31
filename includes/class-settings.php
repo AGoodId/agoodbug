@@ -52,7 +52,19 @@ class Settings {
 			'agoodbug_general',
 			[
 				'name'        => 'enabled',
-				'description' => __( 'Show the feedback button on the frontend.', 'agoodbug' ),
+				'description' => __( 'Show the feedback button on the site.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'show_in_admin',
+			__( 'Show in wp-admin', 'agoodbug' ),
+			[ $this, 'render_checkbox_field' ],
+			'agoodbug',
+			'agoodbug_general',
+			[
+				'name'        => 'show_in_admin',
+				'description' => __( 'Also show the feedback button on admin pages (wp-admin).', 'agoodbug' ),
 			]
 		);
 
@@ -334,6 +346,7 @@ class Settings {
 	public function get_defaults() {
 		return [
 			'enabled'            => true,
+			'show_in_admin'      => true,
 			'allow_anonymous'    => false,
 			'roles'              => [ 'administrator', 'editor' ],
 			'destinations'       => [ 'cpt', 'email' ],
@@ -360,6 +373,7 @@ class Settings {
 		$defaults  = $this->get_defaults();
 
 		$sanitized['enabled']          = ! empty( $input['enabled'] );
+		$sanitized['show_in_admin']    = ! empty( $input['show_in_admin'] );
 		$sanitized['allow_anonymous']  = ! empty( $input['allow_anonymous'] );
 		$sanitized['roles']            = isset( $input['roles'] ) && is_array( $input['roles'] )
 			? array_map( 'sanitize_text_field', $input['roles'] )
