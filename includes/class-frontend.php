@@ -30,8 +30,9 @@ class Frontend {
 	private function should_show_widget() {
 		$settings = Plugin::get_settings();
 
-		// Don't show in admin unless explicitly enabled
-		if ( is_admin() && empty( $settings['show_in_admin'] ) ) {
+		// Don't show in admin unless enabled (default true if setting hasn't been saved yet)
+		$show_in_admin = $settings['show_in_admin'] ?? true;
+		if ( is_admin() && ! $show_in_admin ) {
 			return false;
 		}
 
