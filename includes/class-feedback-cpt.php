@@ -36,7 +36,7 @@ class Feedback_CPT {
 		$labels = [
 			'name'               => __( 'Bug Reports', 'agoodbug' ),
 			'singular_name'      => __( 'Bug Report', 'agoodbug' ),
-			'menu_name'          => __( 'Bug Reports', 'agoodbug' ),
+			'menu_name'          => __( 'AGoodBug', 'agoodbug' ),
 			'add_new'            => __( 'Add New', 'agoodbug' ),
 			'add_new_item'       => __( 'Add New Bug Report', 'agoodbug' ),
 			'edit_item'          => __( 'Edit Bug Report', 'agoodbug' ),
