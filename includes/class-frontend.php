@@ -88,6 +88,8 @@ class Frontend {
 			'isLoggedIn'     => is_user_logged_in(),
 			'userEmail'      => $user_email,
 			'showEmailField' => ! is_user_logged_in() || ! empty( $settings['allow_anonymous'] ),
+			'buttonStyle'    => $settings['button_style'] ?? 'button',
+			'tabLabel'       => $settings['tab_label'] ?? __( 'Tyck till', 'agoodbug' ),
 			'strings'       => [
 				'buttonTitle'            => __( 'Rapportera', 'agoodbug' ),
 				'choiceTitle'            => __( 'Hur vill du rapportera?', 'agoodbug' ),

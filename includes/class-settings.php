@@ -69,6 +69,27 @@ class Settings {
 		);
 
 		add_settings_field(
+			'button_style',
+			__( 'Button Style', 'agoodbug' ),
+			[ $this, 'render_button_style_field' ],
+			'agoodbug',
+			'agoodbug_general'
+		);
+
+		add_settings_field(
+			'tab_label',
+			__( 'Tab Label', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_general',
+			[
+				'name'        => 'tab_label',
+				'description' => __( 'Text shown on the tab (used when Button Style is set to a tab variant).', 'agoodbug' ),
+				'placeholder' => __( 'Tyck till', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
 			'allow_anonymous',
 			__( 'Allow Anonymous', 'agoodbug' ),
 			[ $this, 'render_checkbox_field' ],
@@ -347,6 +368,8 @@ class Settings {
 		return [
 			'enabled'            => true,
 			'show_in_admin'      => true,
+			'button_style'       => 'button',
+			'tab_label'          => __( 'Tyck till', 'agoodbug' ),
 			'allow_anonymous'    => false,
 			'roles'              => [ 'administrator', 'editor' ],
 			'destinations'       => [ 'cpt', 'email' ],
@@ -374,6 +397,11 @@ class Settings {
 
 		$sanitized['enabled']          = ! empty( $input['enabled'] );
 		$sanitized['show_in_admin']    = ! empty( $input['show_in_admin'] );
+		$allowed_styles                = [ 'button', 'tab-bottom', 'tab-side' ];
+		$sanitized['button_style']     = in_array( $input['button_style'] ?? '', $allowed_styles, true )
+			? $input['button_style']
+			: 'button';
+		$sanitized['tab_label']        = sanitize_text_field( $input['tab_label'] ?? __( 'Tyck till', 'agoodbug' ) );
 		$sanitized['allow_anonymous']  = ! empty( $input['allow_anonymous'] );
 		$sanitized['roles']            = isset( $input['roles'] ) && is_array( $input['roles'] )
 			? array_map( 'sanitize_text_field', $input['roles'] )
@@ -480,6 +508,30 @@ class Settings {
 		<?php if ( ! empty( $args['description'] ) ) : ?>
 			<p class="description"><?php echo esc_html( $args['description'] ); ?></p>
 		<?php endif; ?>
+		<?php
+	}
+
+	/**
+	 * Render button style field
+	 */
+	public function render_button_style_field() {
+		$settings = get_option( self::OPTION_NAME, $this->get_defaults() );
+		$value    = $settings['button_style'] ?? 'button';
+
+		$options = [
+			'button'     => __( 'Sticky button (bug icon, bottom right)', 'agoodbug' ),
+			'tab-bottom' => __( 'Tab — bottom right corner', 'agoodbug' ),
+			'tab-side'   => __( 'Tab — right edge, centered vertically', 'agoodbug' ),
+		];
+		?>
+		<fieldset>
+			<?php foreach ( $options as $option_value => $label ) : ?>
+				<label style="display: block; margin-bottom: 5px;">
+					<input type="radio" name="<?php echo esc_attr( self::OPTION_NAME . '[button_style]' ); ?>" value="<?php echo esc_attr( $option_value ); ?>" <?php checked( $value, $option_value ); ?> />
+					<?php echo esc_html( $label ); ?>
+				</label>
+			<?php endforeach; ?>
+		</fieldset>
 		<?php
 	}
 

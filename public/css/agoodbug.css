@@ -59,6 +59,50 @@
 	height: 24px;
 }
 
+/* Tab — bottom right corner */
+.agoodbug-button--tab-bottom {
+	bottom: 0;
+	right: 24px;
+	width: auto;
+	height: auto;
+	border-radius: 6px 6px 0 0;
+	padding: 10px 20px;
+	font-size: 14px;
+	font-weight: 600;
+	font-family: inherit;
+	letter-spacing: 0.01em;
+}
+
+.agoodbug-button--tab-bottom.is-hidden {
+	transform: translateY(100%);
+}
+
+/* Tab — right edge, centered vertically */
+.agoodbug-button--tab-side {
+	bottom: auto;
+	right: 0;
+	top: 50%;
+	width: auto;
+	height: auto;
+	border-radius: 6px 0 0 6px;
+	padding: 14px 10px;
+	font-size: 14px;
+	font-weight: 600;
+	font-family: inherit;
+	letter-spacing: 0.05em;
+	writing-mode: vertical-lr;
+	transform: translateY(-50%) rotate(180deg);
+}
+
+.agoodbug-button--tab-side:hover {
+	transform: translateY(-50%) rotate(180deg) scale(1.05);
+}
+
+.agoodbug-button--tab-side.is-hidden {
+	transform: translateY(-50%) rotate(180deg) translateX(100%);
+	opacity: 0;
+}
+
 /* Choice Panel */
 .agoodbug-choice {
 	position: fixed;
