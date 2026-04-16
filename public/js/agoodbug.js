@@ -465,6 +465,7 @@
 
 		// Capture screenshot
 		async captureScreenshot() {
+			let restored = [];
 			try {
 				// Hide our UI
 				this.overlay.classList.remove('is-active');
@@ -473,7 +474,7 @@
 				await new Promise(r => setTimeout(r, 100));
 
 				// Replace cross-origin images with proxied data URLs
-				const restored = await this.proxyCrossOriginImages();
+				restored = await this.proxyCrossOriginImages();
 
 				// Capture with html2canvas
 				const canvas = await html2canvas(document.body, {
@@ -535,8 +536,10 @@
 
 			} catch (error) {
 				console.error('Screenshot capture failed:', error);
+				this.restoreImages(restored);
 				this.cancelCapture();
-				alert(strings.error);
+				this.screenshot = null;
+				this.openModal();
 			}
 		}
 
