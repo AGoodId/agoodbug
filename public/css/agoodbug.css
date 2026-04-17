@@ -375,6 +375,21 @@
 	display: none;
 }
 
+/* Screenshot failed notice */
+.agoodbug-modal__screenshot-notice {
+	margin-bottom: 12px;
+	padding: 10px 14px;
+	background: #fff8f0;
+	border: 1px solid #ffd5b8;
+	border-radius: 6px;
+}
+
+.agoodbug-modal__screenshot-notice p {
+	margin: 0;
+	font-size: 13px;
+	color: var(--agoodbug-text-muted);
+}
+
 /* General feedback mode (no screenshot) */
 .agoodbug-modal.is-general-mode .agoodbug-modal__body {
 	flex-direction: column;

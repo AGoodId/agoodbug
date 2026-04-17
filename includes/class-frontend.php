@@ -110,6 +110,7 @@ class Frontend {
 				'error'                  => __( 'Något gick fel. Försök igen.', 'agoodbug' ),
 				'retryButton'            => __( 'Försök igen', 'agoodbug' ),
 				'closeButton'            => __( 'Stäng', 'agoodbug' ),
+				'screenshotFailed'       => __( 'Skärmbild kunde inte tas — beskriv problemet nedan.', 'agoodbug' ),
 			],
 		] );
 

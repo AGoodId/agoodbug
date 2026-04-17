@@ -175,6 +175,9 @@
 							<img src="" alt="Screenshot preview" />
 						</div>
 						<div class="agoodbug-modal__sidebar">
+							<div class="agoodbug-modal__screenshot-notice" hidden>
+								<p>${strings.screenshotFailed || 'Skärmbild kunde inte tas — beskriv problemet nedan.'}</p>
+							</div>
 							<div class="agoodbug-modal__form">
 								<div class="agoodbug-modal__field">
 									<label for="agoodbug-comment">${strings.commentLabel}</label>
@@ -509,6 +512,7 @@
 				if (this.isCanvasBlank(canvas)) {
 					this.cancelCapture();
 					this.screenshot = null;
+					this.screenshotFailed = true;
 					this.openModal();
 					return;
 				}
@@ -565,6 +569,7 @@
 				this.restoreImages(restored);
 				this.cancelCapture();
 				this.screenshot = null;
+				this.screenshotFailed = true;
 				this.openModal();
 			}
 		}
@@ -572,23 +577,24 @@
 		// Modal handlers
 		openModal() {
 			const previewContainer = this.modal.querySelector('.agoodbug-modal__preview');
+			const screenshotNotice = this.modal.querySelector('.agoodbug-modal__screenshot-notice');
 
 			if (this.screenshot) {
-				// Screenshot mode - show preview
 				this.previewImg.src = this.screenshot;
 				previewContainer.hidden = false;
 				this.modal.classList.remove('is-general-mode');
 			} else {
-				// General feedback mode - hide preview
 				previewContainer.hidden = true;
 				this.modal.classList.add('is-general-mode');
+			}
+
+			if (screenshotNotice) {
+				screenshotNotice.hidden = !this.screenshotFailed;
 			}
 
 			this.commentField.value = '';
 			this.modal.classList.add('is-open');
 			this.showForm();
-
-			// Focus comment field first (email is below)
 			this.commentField.focus();
 			document.body.style.overflow = 'hidden';
 		}
@@ -596,6 +602,7 @@
 		closeModal() {
 			this.modal.classList.remove('is-open');
 			this.screenshot = null;
+			this.screenshotFailed = false;
 			document.body.style.overflow = '';
 		}
 
