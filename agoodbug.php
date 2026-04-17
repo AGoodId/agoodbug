@@ -3,7 +3,7 @@
  * Plugin Name: AGoodBug
  * Plugin URI: https://github.com/AGoodId/agoodbug
  * Description: Visual feedback and bug reporting widget with screenshot capture.
- * Version: 1.8.0
+ * Version: 1.8.1
  * Author: AGoodId
  * Author URI: https://agoodid.se
  * License: GPL-2.0+
@@ -12,6 +12,7 @@
  * Domain Path: /languages
  * Requires at least: 6.0
  * Requires PHP: 7.4
+ * Network: true
  */
 
 namespace AGoodBug;
@@ -22,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'AGOODBUG_VERSION', '1.8.0' );
+define( 'AGOODBUG_VERSION', '1.8.1' );
 define( 'AGOODBUG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -94,13 +95,14 @@ function init() {
 add_action( 'plugins_loaded', __NAMESPACE__ . '\\init' );
 
 /**
- * Activation hook
+ * Default settings for a single site
  */
-function activate() {
-	// Create default options
-	$defaults = [
+function get_default_settings() {
+	return [
 		'enabled'                => true,
 		'show_in_admin'          => true,
+		'button_style'           => 'button',
+		'tab_label'              => 'Tyck till',
 		'roles'                  => [ 'administrator', 'editor' ],
 		'destinations'           => [ 'cpt', 'email' ],
 		'email_recipients'       => get_option( 'admin_email' ),
@@ -112,17 +114,46 @@ function activate() {
 		'agoodmember_token'      => '',
 		'agoodmember_project_id' => '',
 		'rate_limit'             => 10,
-		'max_screenshot_size'    => 5 * 1024 * 1024, // 5MB
+		'max_screenshot_size'    => 5 * 1024 * 1024,
 	];
+}
 
+/**
+ * Initialize a single site with default settings
+ */
+function activate_for_site() {
 	if ( ! get_option( 'agoodbug_settings' ) ) {
-		add_option( 'agoodbug_settings', $defaults );
+		add_option( 'agoodbug_settings', get_default_settings() );
 	}
-
-	// Flush rewrite rules for CPT
 	flush_rewrite_rules();
 }
+
+/**
+ * Activation hook — handles both single-site and network-wide activation
+ */
+function activate( $network_wide = false ) {
+	if ( is_multisite() && $network_wide ) {
+		foreach ( get_sites( [ 'number' => 0 ] ) as $site ) {
+			switch_to_blog( $site->blog_id );
+			activate_for_site();
+			restore_current_blog();
+		}
+	} else {
+		activate_for_site();
+	}
+}
 register_activation_hook( __FILE__, __NAMESPACE__ . '\\activate' );
+
+/**
+ * Initialize settings when a new site is added to the network
+ */
+add_action( 'wp_initialize_site', function ( $new_site ) {
+	if ( is_plugin_active_for_network( AGOODBUG_PLUGIN_BASENAME ) ) {
+		switch_to_blog( $new_site->blog_id );
+		activate_for_site();
+		restore_current_blog();
+	}
+} );
 
 /**
  * Deactivation hook
