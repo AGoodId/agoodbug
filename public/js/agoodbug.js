@@ -463,6 +463,23 @@
 			}
 		}
 
+		// Returns true if canvas is monochromatic — html2canvas silently failed
+		isCanvasBlank(canvas) {
+			const ctx = canvas.getContext('2d');
+			const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			const total = data.length / 4;
+			const step = Math.max(1, Math.floor(total / 200)) * 4;
+			const r0 = data[0], g0 = data[1], b0 = data[2];
+			let uniform = 0, sampled = 0;
+			for (let i = 0; i < data.length; i += step) {
+				if (Math.abs(data[i] - r0) < 8 && Math.abs(data[i + 1] - g0) < 8 && Math.abs(data[i + 2] - b0) < 8) {
+					uniform++;
+				}
+				sampled++;
+			}
+			return uniform / sampled > 0.9;
+		}
+
 		// Capture screenshot
 		async captureScreenshot() {
 			let restored = [];
@@ -486,6 +503,15 @@
 
 				// Restore original image sources
 				this.restoreImages(restored);
+
+				// Detect blank canvas — html2canvas silently fails on unsupported CSS
+				// (e.g. oklch(), color-mix()). Sample pixels; if >90% are uniform, bail out.
+				if (this.isCanvasBlank(canvas)) {
+					this.cancelCapture();
+					this.screenshot = null;
+					this.openModal();
+					return;
+				}
 
 				// Calculate selection in canvas coordinates
 				const { startX, startY, endX, endY } = this.selection;
