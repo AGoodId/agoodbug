@@ -20,12 +20,13 @@ class Plugin {
 	 * Initialize the plugin
 	 */
 	public function init() {
-		$this->settings = get_option( 'agoodbug_settings', [] );
+		$this->settings = self::get_settings();
 
 		// Initialize components
 		$this->init_cpt();
 		$this->init_rest_api();
 		$this->init_admin();
+		$this->init_network_admin();
 		$this->init_frontend();
 	}
 
@@ -49,12 +50,22 @@ class Plugin {
 	 * Initialize admin
 	 */
 	private function init_admin() {
-		if ( is_admin() ) {
+		if ( is_admin() && ! is_network_admin() ) {
 			$settings = new Settings();
 			$settings->init();
 
 			$admin_page = new Admin_Page();
 			$admin_page->init();
+		}
+	}
+
+	/**
+	 * Initialize network admin (multisite only)
+	 */
+	private function init_network_admin() {
+		if ( is_multisite() && is_network_admin() ) {
+			$network_settings = new Network_Settings();
+			$network_settings->init();
 		}
 	}
 
@@ -69,12 +80,19 @@ class Plugin {
 	}
 
 	/**
-	 * Get plugin settings
+	 * Get plugin settings — merges network defaults with per-site overrides
 	 *
 	 * @return array
 	 */
 	public static function get_settings() {
-		return get_option( 'agoodbug_settings', [] );
+		$site_settings = get_option( 'agoodbug_settings', [] );
+
+		if ( is_multisite() ) {
+			$network_settings = Network_Settings::get_settings();
+			return array_merge( $network_settings, $site_settings );
+		}
+
+		return $site_settings;
 	}
 
 	/**
