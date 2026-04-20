@@ -472,6 +472,10 @@
 		// In the cloned document, replace CSS color() functions with rgb() equivalents.
 		// html2canvas throws when it encounters color(display-p3 …) or color(srgb …).
 		// A 1×1 canvas converts any CSS color to sRGB, giving us a safe rgb() value.
+		// Two-pass strategy:
+		//   1. Patch <style> text and pre-fetched external sheets (handles most cases)
+		//   2. Walk all elements and apply computed colors as inline styles (handles any
+		//      color() values that remain — e.g. from cross-origin sheets we can't fetch)
 		patchColorFunctions(doc, stylesheetCache = new Map()) {
 			const tiny = document.createElement('canvas');
 			tiny.width = tiny.height = 1;
@@ -490,7 +494,7 @@
 				}
 			};
 
-			// Match color() CSS function calls — negative lookbehind excludes property names like background-color:
+			// Pass 1: patch CSS text in <style> elements and fetched external sheets
 			const patch = (text) => text.replace(/(?<![a-zA-Z0-9_-])color\(([^)]*)\)/g, (m) => toRgb(m));
 
 			doc.querySelectorAll('style').forEach(el => { el.textContent = patch(el.textContent); });
@@ -498,10 +502,35 @@
 
 			doc.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
 				const cached = stylesheetCache.get(link.href);
-				if (!cached) return;
-				const style = doc.createElement('style');
-				style.textContent = patch(cached);
-				link.parentNode.replaceChild(style, link);
+				if (cached) {
+					const style = doc.createElement('style');
+					style.textContent = patch(cached);
+					link.parentNode.replaceChild(style, link);
+				}
+			});
+
+			// Pass 2: for any remaining color() values from sheets we couldn't patch,
+			// override with computed colors as !important inline styles on the clone.
+			// getComputedStyle reads from the live document; we map by element index
+			// (clone preserves the same DOM order as the original).
+			const colorProps = [
+				'color', 'background-color',
+				'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+				'outline-color', 'text-decoration-color', 'caret-color',
+			];
+			const origEls  = Array.from(document.querySelectorAll('*'));
+			const cloneEls = Array.from(doc.querySelectorAll('*'));
+
+			origEls.forEach((el, i) => {
+				const cloneEl = cloneEls[i];
+				if (!cloneEl) return;
+				const computed = window.getComputedStyle(el);
+				colorProps.forEach(prop => {
+					const val = computed.getPropertyValue(prop);
+					if (val && val.includes('color(')) {
+						cloneEl.style.setProperty(prop, toRgb(val), 'important');
+					}
+				});
 			});
 		}
 
