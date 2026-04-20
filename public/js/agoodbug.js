@@ -496,14 +496,12 @@
 				// Replace cross-origin images with proxied data URLs
 				restored = await this.proxyCrossOriginImages();
 
-				// Capture with html2canvas — foreignObjectRendering lets the browser's
-				// own engine handle CSS (mix-blend-mode, oklch, clip-path, etc.)
+				// Capture with html2canvas
 				const canvas = await html2canvas(document.body, {
 					useCORS: true,
 					allowTaint: false,
 					scale: window.devicePixelRatio || 1,
 					logging: false,
-					foreignObjectRendering: true,
 				});
 
 				// Restore original image sources
