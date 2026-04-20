@@ -454,6 +454,57 @@
 			return restored;
 		}
 
+		// Pre-fetch same-origin external stylesheets for color() patching
+		async prefetchStylesheets() {
+			const cache = new Map();
+			const links = document.querySelectorAll('link[rel="stylesheet"]');
+			await Promise.all(Array.from(links).map(async (link) => {
+				const href = link.href;
+				if (!href) return;
+				try {
+					const res = await fetch(href);
+					if (res.ok) cache.set(href, await res.text());
+				} catch (e) {}
+			}));
+			return cache;
+		}
+
+		// In the cloned document, replace CSS color() functions with rgb() equivalents.
+		// html2canvas throws when it encounters color(display-p3 …) or color(srgb …).
+		// A 1×1 canvas converts any CSS color to sRGB, giving us a safe rgb() value.
+		patchColorFunctions(doc, stylesheetCache = new Map()) {
+			const tiny = document.createElement('canvas');
+			tiny.width = tiny.height = 1;
+			const ctx = tiny.getContext('2d');
+
+			const toRgb = (colorStr) => {
+				try {
+					ctx.clearRect(0, 0, 1, 1);
+					ctx.fillStyle = colorStr;
+					ctx.fillRect(0, 0, 1, 1);
+					const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+					if (a === 0) return 'transparent';
+					return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
+				} catch (e) {
+					return 'transparent';
+				}
+			};
+
+			// Match color() CSS function calls — negative lookbehind excludes property names like background-color:
+			const patch = (text) => text.replace(/(?<![a-zA-Z0-9_-])color\(([^)]*)\)/g, (m) => toRgb(m));
+
+			doc.querySelectorAll('style').forEach(el => { el.textContent = patch(el.textContent); });
+			doc.querySelectorAll('[style]').forEach(el => { el.setAttribute('style', patch(el.getAttribute('style') || '')); });
+
+			doc.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+				const cached = stylesheetCache.get(link.href);
+				if (!cached) return;
+				const style = doc.createElement('style');
+				style.textContent = patch(cached);
+				link.parentNode.replaceChild(style, link);
+			});
+		}
+
 		// Restore original image sources
 		restoreImages(restored) {
 			for (const item of restored) {
@@ -496,12 +547,16 @@
 				// Replace cross-origin images with proxied data URLs
 				restored = await this.proxyCrossOriginImages();
 
+				// Pre-fetch external stylesheets so onclone can patch color() functions
+				const stylesheetCache = await this.prefetchStylesheets();
+
 				// Capture with html2canvas
 				const canvas = await html2canvas(document.body, {
 					useCORS: true,
 					allowTaint: false,
 					scale: window.devicePixelRatio || 1,
 					logging: false,
+					onclone: (clonedDoc) => this.patchColorFunctions(clonedDoc, stylesheetCache),
 				});
 
 				// Restore original image sources
