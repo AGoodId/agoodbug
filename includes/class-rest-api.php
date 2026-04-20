@@ -349,6 +349,17 @@ class REST_API {
 				}
 			}
 
+			// Send to Slack (wrapped in try-catch)
+			if ( in_array( 'slack', $destinations, true ) && ! empty( $settings['slack_enabled'] ) ) {
+				try {
+					$slack = new Integrations\Slack();
+					$results['slack'] = $slack->send( $data, $screenshot_url, $post_id );
+				} catch ( \Exception $e ) {
+					$results['slack'] = false;
+					error_log( 'AGoodBug - Slack error: ' . $e->getMessage() );
+				}
+			}
+
 			// Send to AGoodMember (wrapped in try-catch)
 			if ( in_array( 'agoodmember', $destinations, true ) && ! empty( $settings['agoodmember_enabled'] ) ) {
 				try {

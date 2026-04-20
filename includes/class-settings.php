@@ -211,6 +211,38 @@ class Settings {
 			[ 'name' => 'checkvist_list_id' ]
 		);
 
+		// Slack section
+		add_settings_section(
+			'agoodbug_slack',
+			__( 'Slack Integration', 'agoodbug' ),
+			function() {
+				echo '<p>' . esc_html__( 'Send bug reports as messages to a Slack channel via Incoming Webhooks.', 'agoodbug' ) . '</p>';
+			},
+			'agoodbug'
+		);
+
+		add_settings_field(
+			'slack_enabled',
+			__( 'Enable', 'agoodbug' ),
+			[ $this, 'render_checkbox_field' ],
+			'agoodbug',
+			'agoodbug_slack',
+			[ 'name' => 'slack_enabled' ]
+		);
+
+		add_settings_field(
+			'slack_webhook_url',
+			__( 'Webhook URL', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_slack',
+			[
+				'name'        => 'slack_webhook_url',
+				'placeholder' => 'https://hooks.slack.com/services/...',
+				'description' => __( 'Create an Incoming Webhook in Slack: App → Incoming Webhooks → Add New Webhook.', 'agoodbug' ),
+			]
+		);
+
 		// AGoodMember section
 		add_settings_section(
 			'agoodbug_agoodmember',
@@ -374,6 +406,8 @@ class Settings {
 			'roles'              => [ 'administrator', 'editor' ],
 			'destinations'       => [ 'cpt', 'email' ],
 			'email_recipients'       => get_option( 'admin_email' ),
+			'slack_enabled'          => false,
+			'slack_webhook_url'      => '',
 			'checkvist_enabled'      => false,
 			'checkvist_username'     => '',
 			'checkvist_api_key'      => '',
@@ -410,6 +444,10 @@ class Settings {
 			? array_map( 'sanitize_text_field', $input['destinations'] )
 			: $defaults['destinations'];
 		$sanitized['email_recipients'] = sanitize_text_field( $input['email_recipients'] ?? $defaults['email_recipients'] );
+
+		// Slack
+		$sanitized['slack_enabled']      = ! empty( $input['slack_enabled'] );
+		$sanitized['slack_webhook_url']  = esc_url_raw( $input['slack_webhook_url'] ?? '' );
 
 		// Checkvist
 		$sanitized['checkvist_enabled']  = ! empty( $input['checkvist_enabled'] );
@@ -565,6 +603,7 @@ class Settings {
 		$options = [
 			'cpt'         => __( 'Save in WordPress (Bug Reports)', 'agoodbug' ),
 			'email'       => __( 'Send email', 'agoodbug' ),
+			'slack'       => __( 'Send Slack notification', 'agoodbug' ),
 			'checkvist'   => __( 'Create Checkvist task', 'agoodbug' ),
 			'agoodmember' => __( 'Create AGoodMember task', 'agoodbug' ),
 		];
