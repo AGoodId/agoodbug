@@ -454,29 +454,12 @@
 			return restored;
 		}
 
-		// Pre-fetch same-origin external stylesheets for color() patching
-		async prefetchStylesheets() {
-			const cache = new Map();
-			const links = document.querySelectorAll('link[rel="stylesheet"]');
-			await Promise.all(Array.from(links).map(async (link) => {
-				const href = link.href;
-				if (!href) return;
-				try {
-					const res = await fetch(href);
-					if (res.ok) cache.set(href, await res.text());
-				} catch (e) {}
-			}));
-			return cache;
-		}
-
-		// In the cloned document, replace CSS color() functions with rgb() equivalents.
-		// html2canvas throws when it encounters color(display-p3 …) or color(srgb …).
-		// A 1×1 canvas converts any CSS color to sRGB, giving us a safe rgb() value.
-		// Two-pass strategy:
-		//   1. Patch <style> text and pre-fetched external sheets (handles most cases)
-		//   2. Walk all elements and apply computed colors as inline styles (handles any
-		//      color() values that remain — e.g. from cross-origin sheets we can't fetch)
-		patchColorFunctions(doc, stylesheetCache = new Map()) {
+		// Patch color() CSS functions directly in the live document before html2canvas runs.
+		// html2canvas throws on color(display-p3 …) / color(srgb …) etc. because its own
+		// CSS parser doesn't support them. We convert each one to rgb() via a 1×1 canvas
+		// (the browser converts any color space to sRGB when drawing to canvas).
+		// Returns an array of restore functions; call each after html2canvas finishes.
+		async applyColorPatch() {
 			const tiny = document.createElement('canvas');
 			tiny.width = tiny.height = 1;
 			const ctx = tiny.getContext('2d');
@@ -494,44 +477,39 @@
 				}
 			};
 
-			// Pass 1: patch CSS text in <style> elements and fetched external sheets
 			const patch = (text) => text.replace(/(?<![a-zA-Z0-9_-])color\(([^)]*)\)/g, (m) => toRgb(m));
+			const restoreFns = [];
 
-			doc.querySelectorAll('style').forEach(el => { el.textContent = patch(el.textContent); });
-			doc.querySelectorAll('[style]').forEach(el => { el.setAttribute('style', patch(el.getAttribute('style') || '')); });
-
-			doc.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
-				const cached = stylesheetCache.get(link.href);
-				if (cached) {
-					const style = doc.createElement('style');
-					style.textContent = patch(cached);
-					link.parentNode.replaceChild(style, link);
+			// Patch inline <style> elements
+			document.querySelectorAll('style').forEach(el => {
+				const orig = el.textContent;
+				const patched = patch(orig);
+				if (patched !== orig) {
+					el.textContent = patched;
+					restoreFns.push(() => { el.textContent = orig; });
 				}
 			});
 
-			// Pass 2: for any remaining color() values from sheets we couldn't patch,
-			// override with computed colors as !important inline styles on the clone.
-			// getComputedStyle reads from the live document; we map by element index
-			// (clone preserves the same DOM order as the original).
-			const colorProps = [
-				'color', 'background-color',
-				'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
-				'outline-color', 'text-decoration-color', 'caret-color',
-			];
-			const origEls  = Array.from(document.querySelectorAll('*'));
-			const cloneEls = Array.from(doc.querySelectorAll('*'));
+			// Fetch external stylesheets, patch, inject as <style>, disable original <link>
+			const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+			await Promise.all(links.map(async (link) => {
+				const href = link.href;
+				if (!href) return;
+				try {
+					const res = await fetch(href);
+					if (!res.ok) return;
+					const text = await res.text();
+					const patched = patch(text);
+					if (patched === text) return;
+					const style = document.createElement('style');
+					style.textContent = patched;
+					link.insertAdjacentElement('afterend', style);
+					link.disabled = true;
+					restoreFns.push(() => { style.remove(); link.disabled = false; });
+				} catch (e) {}
+			}));
 
-			origEls.forEach((el, i) => {
-				const cloneEl = cloneEls[i];
-				if (!cloneEl) return;
-				const computed = window.getComputedStyle(el);
-				colorProps.forEach(prop => {
-					const val = computed.getPropertyValue(prop);
-					if (val && val.includes('color(')) {
-						cloneEl.style.setProperty(prop, toRgb(val), 'important');
-					}
-				});
-			});
+			return restoreFns;
 		}
 
 		// Restore original image sources
@@ -566,6 +544,7 @@
 		// Capture screenshot
 		async captureScreenshot() {
 			let restored = [];
+			let cssRestoreFns = [];
 			try {
 				// Hide our UI
 				this.overlay.classList.remove('is-active');
@@ -576,8 +555,8 @@
 				// Replace cross-origin images with proxied data URLs
 				restored = await this.proxyCrossOriginImages();
 
-				// Pre-fetch external stylesheets so onclone can patch color() functions
-				const stylesheetCache = await this.prefetchStylesheets();
+				// Patch color() functions in live document before html2canvas reads CSS
+				cssRestoreFns = await this.applyColorPatch();
 
 				// Capture with html2canvas
 				const canvas = await html2canvas(document.body, {
@@ -585,10 +564,10 @@
 					allowTaint: false,
 					scale: window.devicePixelRatio || 1,
 					logging: false,
-					onclone: (clonedDoc) => this.patchColorFunctions(clonedDoc, stylesheetCache),
 				});
 
-				// Restore original image sources
+				// Restore CSS patches and image sources
+				cssRestoreFns.forEach(fn => fn());
 				this.restoreImages(restored);
 
 				// Detect blank canvas — html2canvas silently fails on unsupported CSS
@@ -650,6 +629,7 @@
 
 			} catch (error) {
 				console.error('Screenshot capture failed:', error);
+				cssRestoreFns.forEach(fn => fn());
 				this.restoreImages(restored);
 				this.cancelCapture();
 				this.screenshot = null;
