@@ -509,6 +509,31 @@
 				} catch (e) {}
 			}));
 
+			// Belt-and-suspenders: html2canvas also reads window.getComputedStyle() per
+			// element. In Chrome 111+ this returns color(display-p3 …) natively. Apply
+			// !important inline styles with rgb() equivalents for any element that still
+			// has color() in its computed values after the stylesheet patches above.
+			const colorProps = [
+				'color', 'background-color',
+				'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+				'outline-color', 'text-decoration-color',
+			];
+			document.querySelectorAll('*').forEach(el => {
+				const computed = window.getComputedStyle(el);
+				const overrides = {};
+				colorProps.forEach(prop => {
+					const val = computed.getPropertyValue(prop);
+					if (val && val.includes('color(')) overrides[prop] = toRgb(val);
+				});
+				if (!Object.keys(overrides).length) return;
+				const prev = {};
+				colorProps.forEach(prop => { prev[prop] = el.style.getPropertyValue(prop); });
+				Object.entries(overrides).forEach(([p, v]) => el.style.setProperty(p, v, 'important'));
+				restoreFns.push(() => {
+					Object.entries(prev).forEach(([p, v]) => v ? el.style.setProperty(p, v) : el.style.removeProperty(p));
+				});
+			});
+
 			return restoreFns;
 		}
 
