@@ -117,6 +117,7 @@ class AGoodMember {
 
 		$parts[] = '<p>🐛 <strong>Bug report från AGoodBug</strong></p>';
 		$parts[] = '<p><strong>Sida:</strong> <a href="' . esc_url( $data['url'] ) . '">' . esc_html( $data['url'] ) . '</a></p>';
+		$parts[] = '<p><strong>Datum:</strong> ' . esc_html( current_time( 'Y-m-d H:i' ) ) . '</p>';
 		$parts[] = '<p><strong>Kommentar:</strong> ' . esc_html( $data['comment'] ?? '' ) . '</p>';
 
 		// Screenshot

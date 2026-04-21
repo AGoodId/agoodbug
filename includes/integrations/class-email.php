@@ -115,6 +115,10 @@ class Email {
 							</span>
 						</div>
 						<div class="meta-row">
+							<span class="meta-label"><?php esc_html_e( 'Date:', 'agoodbug' ); ?></span>
+							<span class="meta-value"><?php echo esc_html( current_time( 'Y-m-d H:i' ) ); ?></span>
+						</div>
+						<div class="meta-row">
 							<span class="meta-label"><?php esc_html_e( 'Page:', 'agoodbug' ); ?></span>
 							<span class="meta-value"><a href="<?php echo esc_url( $data['url'] ); ?>"><?php echo esc_html( $data['url'] ); ?></a></span>
 						</div>

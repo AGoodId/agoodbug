@@ -69,8 +69,9 @@ class Slack {
 		}
 
 		// Device/browser summary
-		$device  = ucfirst( $data['device_type'] ?? 'unknown' );
-		$browser = $data['browser'] ?? 'N/A';
+		$device    = ucfirst( $data['device_type'] ?? 'unknown' );
+		$browser   = $data['browser'] ?? 'N/A';
+		$submitted = current_time( 'Y-m-d H:i' );
 
 		$blocks = [
 			[
@@ -84,6 +85,7 @@ class Slack {
 				'type'   => 'section',
 				'fields' => [
 					[ 'type' => 'mrkdwn', 'text' => '*' . __( 'From', 'agoodbug' ) . ':* ' . $reporter ],
+					[ 'type' => 'mrkdwn', 'text' => '*' . __( 'Date', 'agoodbug' ) . ':* ' . $submitted ],
 					[ 'type' => 'mrkdwn', 'text' => '*' . __( 'Page', 'agoodbug' ) . ':* <' . $page_url . '|' . wp_parse_url( $page_url, PHP_URL_PATH ) . '>' ],
 					[ 'type' => 'mrkdwn', 'text' => '*' . __( 'Browser', 'agoodbug' ) . ':* ' . $browser ],
 					[ 'type' => 'mrkdwn', 'text' => '*' . __( 'Device', 'agoodbug' ) . ':* ' . $device ],
