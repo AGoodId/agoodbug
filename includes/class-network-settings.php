@@ -76,20 +76,39 @@ class Network_Settings {
 	 * Sanitize network settings input
 	 */
 	private function sanitize( array $input ): array {
-		$allowed_styles = [ 'button', 'tab-bottom', 'tab-side' ];
+		$allowed_styles       = [ 'button', 'tab-bottom', 'tab-side' ];
+		$allowed_destinations = [ 'cpt', 'email', 'slack', 'checkvist', 'agoodmember' ];
 
 		return [
-			'enabled'        => ! empty( $input['enabled'] ),
-			'show_in_admin'  => ! empty( $input['show_in_admin'] ),
-			'button_style'   => in_array( $input['button_style'] ?? '', $allowed_styles, true )
+			'enabled'                => ! empty( $input['enabled'] ),
+			'show_in_admin'          => ! empty( $input['show_in_admin'] ),
+			'button_style'           => in_array( $input['button_style'] ?? '', $allowed_styles, true )
 				? $input['button_style']
 				: 'button',
-			'tab_label'      => sanitize_text_field( $input['tab_label'] ?? __( 'Tyck till', 'agoodbug' ) ),
-			'allow_anonymous' => ! empty( $input['allow_anonymous'] ),
-			'roles'          => isset( $input['roles'] ) && is_array( $input['roles'] )
+			'tab_label'              => sanitize_text_field( $input['tab_label'] ?? __( 'Tyck till', 'agoodbug' ) ),
+			'allow_anonymous'        => ! empty( $input['allow_anonymous'] ),
+			'roles'                  => isset( $input['roles'] ) && is_array( $input['roles'] )
 				? array_map( 'sanitize_text_field', $input['roles'] )
 				: [ 'administrator', 'editor' ],
-			'rate_limit'     => absint( $input['rate_limit'] ?? 10 ),
+			'rate_limit'             => absint( $input['rate_limit'] ?? 10 ),
+			// Destinations
+			'destinations'           => isset( $input['destinations'] ) && is_array( $input['destinations'] )
+				? array_values( array_intersect( array_map( 'sanitize_text_field', $input['destinations'] ), $allowed_destinations ) )
+				: [ 'cpt', 'email' ],
+			// Email
+			'email_recipients'       => sanitize_textarea_field( $input['email_recipients'] ?? '' ),
+			// Slack
+			'slack_enabled'          => ! empty( $input['slack_enabled'] ),
+			'slack_webhook_url'      => esc_url_raw( $input['slack_webhook_url'] ?? '' ),
+			// Checkvist
+			'checkvist_enabled'      => ! empty( $input['checkvist_enabled'] ),
+			'checkvist_username'     => sanitize_text_field( $input['checkvist_username'] ?? '' ),
+			'checkvist_api_key'      => sanitize_text_field( $input['checkvist_api_key'] ?? '' ),
+			'checkvist_list_id'      => sanitize_text_field( $input['checkvist_list_id'] ?? '' ),
+			// AGoodMember
+			'agoodmember_enabled'    => ! empty( $input['agoodmember_enabled'] ),
+			'agoodmember_token'      => sanitize_text_field( $input['agoodmember_token'] ?? '' ),
+			'agoodmember_project_id' => sanitize_text_field( $input['agoodmember_project_id'] ?? '' ),
 		];
 	}
 
@@ -98,13 +117,24 @@ class Network_Settings {
 	 */
 	public static function get_settings(): array {
 		$defaults = [
-			'enabled'         => true,
-			'show_in_admin'   => true,
-			'button_style'    => 'button',
-			'tab_label'       => 'Tyck till',
-			'allow_anonymous' => false,
-			'roles'           => [ 'administrator', 'editor' ],
-			'rate_limit'      => 10,
+			'enabled'                => true,
+			'show_in_admin'          => true,
+			'button_style'           => 'button',
+			'tab_label'              => 'Tyck till',
+			'allow_anonymous'        => false,
+			'roles'                  => [ 'administrator', 'editor' ],
+			'rate_limit'             => 10,
+			'destinations'           => [ 'cpt', 'email' ],
+			'email_recipients'       => '',
+			'slack_enabled'          => false,
+			'slack_webhook_url'      => '',
+			'checkvist_enabled'      => false,
+			'checkvist_username'     => '',
+			'checkvist_api_key'      => '',
+			'checkvist_list_id'      => '',
+			'agoodmember_enabled'    => false,
+			'agoodmember_token'      => '',
+			'agoodmember_project_id' => '',
 		];
 
 		$saved = get_site_option( self::OPTION_NAME, [] );
@@ -214,6 +244,104 @@ class Network_Settings {
 							<input type="number" name="<?php echo esc_attr( self::OPTION_NAME . '[rate_limit]' ); ?>" value="<?php echo esc_attr( $settings['rate_limit'] ); ?>" min="0" max="1000" class="small-text" />
 							<p class="description"><?php esc_html_e( 'Maximum number of reports per user per hour. Set to 0 for unlimited.', 'agoodbug' ); ?></p>
 						</td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'Destinations', 'agoodbug' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Where to send feedback. Individual sites can override these settings.', 'agoodbug' ); ?></p>
+
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Send To', 'agoodbug' ); ?></th>
+						<td>
+							<?php
+							$destination_options = [
+								'cpt'         => __( 'WordPress (save as post)', 'agoodbug' ),
+								'email'       => __( 'Email', 'agoodbug' ),
+								'slack'       => __( 'Slack', 'agoodbug' ),
+								'checkvist'   => __( 'Checkvist', 'agoodbug' ),
+								'agoodmember' => __( 'AGoodMember', 'agoodbug' ),
+							];
+							foreach ( $destination_options as $value => $label ) :
+								?>
+								<label style="display: block; margin-bottom: 5px;">
+									<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[destinations][]' ); ?>" value="<?php echo esc_attr( $value ); ?>" <?php checked( in_array( $value, $settings['destinations'], true ) ); ?> />
+									<?php echo esc_html( $label ); ?>
+								</label>
+							<?php endforeach; ?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Email Recipients', 'agoodbug' ); ?></th>
+						<td>
+							<textarea name="<?php echo esc_attr( self::OPTION_NAME . '[email_recipients]' ); ?>" rows="3" class="large-text"><?php echo esc_textarea( $settings['email_recipients'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'One email address per line. Leave empty to use each site\'s admin email.', 'agoodbug' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'Slack', 'agoodbug' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Enable Slack', 'agoodbug' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[slack_enabled]' ); ?>" value="1" <?php checked( $settings['slack_enabled'] ); ?> />
+								<?php esc_html_e( 'Send notifications to Slack.', 'agoodbug' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Slack Webhook URL', 'agoodbug' ); ?></th>
+						<td>
+							<input type="url" name="<?php echo esc_attr( self::OPTION_NAME . '[slack_webhook_url]' ); ?>" value="<?php echo esc_attr( $settings['slack_webhook_url'] ); ?>" class="large-text" placeholder="https://hooks.slack.com/services/..." />
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'Checkvist', 'agoodbug' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Enable Checkvist', 'agoodbug' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_enabled]' ); ?>" value="1" <?php checked( $settings['checkvist_enabled'] ); ?> />
+								<?php esc_html_e( 'Send tasks to Checkvist.', 'agoodbug' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Checkvist Username', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_username]' ); ?>" value="<?php echo esc_attr( $settings['checkvist_username'] ); ?>" class="regular-text" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Checkvist API Key', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_api_key]' ); ?>" value="<?php echo esc_attr( $settings['checkvist_api_key'] ); ?>" class="regular-text" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Checkvist List ID', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_list_id]' ); ?>" value="<?php echo esc_attr( $settings['checkvist_list_id'] ); ?>" class="regular-text" /></td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'AGoodMember', 'agoodbug' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Enable AGoodMember', 'agoodbug' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_enabled]' ); ?>" value="1" <?php checked( $settings['agoodmember_enabled'] ); ?> />
+								<?php esc_html_e( 'Send reports to AGoodMember.', 'agoodbug' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'AGoodMember Token', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_token]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_token'] ); ?>" class="regular-text" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'AGoodMember Project ID', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_project_id]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_project_id'] ); ?>" class="regular-text" /></td>
 					</tr>
 				</table>
 
