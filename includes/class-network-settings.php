@@ -18,6 +18,8 @@ class Network_Settings {
 		add_action( 'network_admin_menu', [ $this, 'add_menu_page' ] );
 		add_action( 'network_admin_edit_agoodbug_network_settings', [ $this, 'save_settings' ] );
 		add_action( 'network_admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+		add_action( 'wp_ajax_agoodbug_network_test_agoodmember', [ $this, 'ajax_test_agoodmember' ] );
+		add_action( 'wp_ajax_agoodbug_network_test_slack', [ $this, 'ajax_test_slack' ] );
 	}
 
 	/**
@@ -140,6 +142,95 @@ class Network_Settings {
 		$saved = get_site_option( self::OPTION_NAME, [] );
 
 		return array_merge( $defaults, $saved );
+	}
+
+	/**
+	 * AJAX: test AGoodMember connection using saved network settings
+	 */
+	public function ajax_test_agoodmember() {
+		check_ajax_referer( 'agoodbug_network_test_agoodmember' );
+
+		if ( ! current_user_can( 'manage_network_options' ) ) {
+			wp_send_json_error( __( 'Behörighet saknas.', 'agoodbug' ) );
+		}
+
+		$settings   = self::get_settings();
+		$api_key    = $settings['agoodmember_token'] ?? '';
+		$project_id = $settings['agoodmember_project_id'] ?? '';
+
+		if ( empty( $api_key ) ) {
+			wp_send_json_error( __( 'API-nyckel saknas — spara inställningarna först.', 'agoodbug' ) );
+		}
+
+		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks?limit=1', [
+			'headers' => [ 'X-API-Key' => $api_key ],
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( $response->get_error_message() );
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+
+		if ( $code === 401 || $code === 403 ) {
+			wp_send_json_error( __( 'Ogiltig API-nyckel.', 'agoodbug' ) );
+		}
+		if ( $code < 200 || $code >= 300 ) {
+			wp_send_json_error( sprintf( __( 'API svarade med HTTP %d.', 'agoodbug' ), $code ) );
+		}
+
+		$message = __( 'Anslutningen fungerar!', 'agoodbug' );
+
+		if ( ! empty( $project_id ) ) {
+			$proj = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks?project_id=' . rawurlencode( $project_id ) . '&limit=1', [
+				'headers' => [ 'X-API-Key' => $api_key ],
+				'timeout' => 15,
+			] );
+			$proj_code = wp_remote_retrieve_response_code( $proj );
+			$message   = ( $proj_code >= 200 && $proj_code < 300 )
+				? __( 'Anslutningen fungerar! Projektet hittades.', 'agoodbug' )
+				: __( 'API-nyckeln fungerar, men projektet kunde inte verifieras.', 'agoodbug' );
+		}
+
+		wp_send_json_success( $message );
+	}
+
+	/**
+	 * AJAX: test Slack webhook using saved network settings
+	 */
+	public function ajax_test_slack() {
+		check_ajax_referer( 'agoodbug_network_test_slack' );
+
+		if ( ! current_user_can( 'manage_network_options' ) ) {
+			wp_send_json_error( __( 'Behörighet saknas.', 'agoodbug' ) );
+		}
+
+		$settings    = self::get_settings();
+		$webhook_url = $settings['slack_webhook_url'] ?? '';
+
+		if ( empty( $webhook_url ) ) {
+			wp_send_json_error( __( 'Webhook URL saknas — spara inställningarna först.', 'agoodbug' ) );
+		}
+
+		$response = wp_remote_post( $webhook_url, [
+			'headers' => [ 'Content-Type' => 'application/json' ],
+			'body'    => wp_json_encode( [
+				'text' => __( '✅ AGoodBug — test av Slack-anslutning lyckades!', 'agoodbug' ),
+			] ),
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( $response->get_error_message() );
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code !== 200 ) {
+			wp_send_json_error( sprintf( __( 'Slack svarade med HTTP %d.', 'agoodbug' ), $code ) );
+		}
+
+		wp_send_json_success( __( 'Slack-meddelande skickat!', 'agoodbug' ) );
 	}
 
 	/**
@@ -295,6 +386,12 @@ class Network_Settings {
 						<th scope="row"><?php esc_html_e( 'Slack Webhook URL', 'agoodbug' ); ?></th>
 						<td>
 							<input type="url" name="<?php echo esc_attr( self::OPTION_NAME . '[slack_webhook_url]' ); ?>" value="<?php echo esc_attr( $settings['slack_webhook_url'] ); ?>" class="large-text" placeholder="https://hooks.slack.com/services/..." />
+							<p>
+								<button type="button" class="button agoodbug-test-btn" data-action="agoodbug_network_test_slack" data-nonce="<?php echo esc_attr( wp_create_nonce( 'agoodbug_network_test_slack' ) ); ?>">
+									<?php esc_html_e( 'Testa anslutning', 'agoodbug' ); ?>
+								</button>
+								<span class="agoodbug-test-result" style="margin-left:8px;"></span>
+							</p>
 						</td>
 					</tr>
 				</table>
@@ -341,9 +438,43 @@ class Network_Settings {
 					</tr>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'AGoodMember Project ID', 'agoodbug' ); ?></th>
-						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_project_id]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_project_id'] ); ?>" class="regular-text" /></td>
+						<td>
+							<input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_project_id]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_project_id'] ); ?>" class="regular-text" />
+							<p>
+								<button type="button" class="button agoodbug-test-btn" data-action="agoodbug_network_test_agoodmember" data-nonce="<?php echo esc_attr( wp_create_nonce( 'agoodbug_network_test_agoodmember' ) ); ?>">
+									<?php esc_html_e( 'Testa anslutning', 'agoodbug' ); ?>
+								</button>
+								<span class="agoodbug-test-result" style="margin-left:8px;"></span>
+							</p>
+						</td>
 					</tr>
 				</table>
+
+				<script>
+				document.querySelectorAll('.agoodbug-test-btn').forEach(function(btn) {
+					btn.addEventListener('click', function() {
+						var result = btn.parentElement.querySelector('.agoodbug-test-result');
+						btn.disabled = true;
+						result.style.color = '';
+						result.textContent = '<?php echo esc_js( __( 'Testar…', 'agoodbug' ) ); ?>';
+						fetch('<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+							body: 'action=' + btn.dataset.action + '&_wpnonce=' + btn.dataset.nonce,
+						})
+						.then(function(r) { return r.json(); })
+						.then(function(data) {
+							result.style.color = data.success ? 'green' : 'red';
+							result.textContent = data.success ? data.data : (data.data || '<?php echo esc_js( __( 'Okänt fel.', 'agoodbug' ) ); ?>');
+						})
+						.catch(function() {
+							result.style.color = 'red';
+							result.textContent = '<?php echo esc_js( __( 'Begäran misslyckades.', 'agoodbug' ) ); ?>';
+						})
+						.finally(function() { btn.disabled = false; });
+					});
+				});
+				</script>
 
 				<p class="submit">
 					<input type="submit" class="button-primary" value="<?php esc_attr_e( 'Save Changes', 'agoodbug' ); ?>" />
