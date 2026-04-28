@@ -454,23 +454,19 @@
 			return restored;
 		}
 
-		// Force all elements visible before capture. GSAP/ScrollTrigger and similar
-		// libraries set opacity:0 / clip-path / visibility on elements as initial
-		// states for scroll-driven animations. The live DOM has these animated to
-		// visible states, but html2canvas clones into an iframe where the
-		// animations don't re-run — so any elements still relying on inline JS
-		// state appear blank. This CSS override beats inline styles via specificity
-		// + !important and is removed after capture.
+		// Defeat GSAP/ScrollTrigger initial-hidden states for elements that haven't
+		// scrolled into view in the cloned iframe. Only override opacity (the
+		// common fade-in trick) — keep visibility/display alone so we don't reveal
+		// genuinely hidden UI like cookie banners, dropdowns or our own modal.
 		applyVisibilityOverride() {
 			const style = document.createElement('style');
 			style.id = 'agoodbug-capture-overrides';
 			style.textContent = `
-				*, *::before, *::after {
-					opacity: 1 !important;
-					visibility: visible !important;
-					clip-path: none !important;
-					-webkit-clip-path: none !important;
-				}
+				*, *::before, *::after { opacity: 1 !important; }
+				.agoodbug-overlay,
+				.agoodbug-modal,
+				.agoodbug-button,
+				.agoodbug-tab { display: none !important; }
 			`;
 			document.head.appendChild(style);
 			return () => style.remove();
