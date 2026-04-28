@@ -583,11 +583,20 @@
 				// Patch color() functions in live document before html2canvas reads CSS
 				cssRestoreFns = await this.applyColorPatch();
 
-				// Capture with html2canvas
+				// Compute a safe scale: long pages produce huge canvases that hit
+				// browser limits (Safari ~16 megapixels, others vary) and only render
+				// partially — captures past a certain depth come back blank/garbled.
+				// Cap area at 12MP and pick the largest scale that fits.
+				const bodyRectPre = document.body.getBoundingClientRect();
+				const maxArea  = 12 * 1024 * 1024; // 12 megapixels — safe everywhere
+				const dpr      = window.devicePixelRatio || 1;
+				const scaleFit = Math.sqrt( maxArea / (bodyRectPre.width * bodyRectPre.height) );
+				const captureScale = Math.min( dpr, scaleFit );
+
 				const canvas = await html2canvas(document.body, {
 					useCORS: true,
 					allowTaint: false,
-					scale: window.devicePixelRatio || 1,
+					scale: captureScale,
 					logging: false,
 				});
 
