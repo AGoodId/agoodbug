@@ -607,8 +607,140 @@
 			return uniform / sampled > 0.9;
 		}
 
+		// Show "we need permission" soft-start prompt before triggering the
+		// browser's getDisplayMedia dialog. Resolves to true if user clicks
+		// Fortsätt, false if Avbryt or backdrop click.
+		showPermissionPrompt() {
+			return new Promise((resolve) => {
+				const prompt = document.createElement('div');
+				prompt.className = 'agoodbug-permission';
+				prompt.innerHTML = `
+					<div class="agoodbug-permission__backdrop"></div>
+					<div class="agoodbug-permission__box">
+						<h3>${this.escapeHtml(this.strings.permissionTitle || 'Tillåtelse krävs')}</h3>
+						<p>${this.escapeHtml(this.strings.permissionBody || 'Vi behöver din tillåtelse att fånga skärmen. Klicka "Dela" i nästa dialog.')}</p>
+						<div class="agoodbug-permission__actions">
+							<button type="button" class="agoodbug-permission__cancel">${this.escapeHtml(this.strings.cancelButton || 'Avbryt')}</button>
+							<button type="button" class="agoodbug-permission__confirm">${this.escapeHtml(this.strings.continueButton || 'Fortsätt')}</button>
+						</div>
+					</div>
+				`;
+				document.body.appendChild(prompt);
+				const close = (val) => { prompt.remove(); resolve(val); };
+				prompt.querySelector('.agoodbug-permission__cancel').onclick = () => close(false);
+				prompt.querySelector('.agoodbug-permission__backdrop').onclick = () => close(false);
+				prompt.querySelector('.agoodbug-permission__confirm').onclick = () => close(true);
+			});
+		}
+
+		escapeHtml(str) {
+			return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+		}
+
+		// Capture via the browser's Screen Capture API. Pixel-perfect — captures
+		// exactly what the user sees, regardless of CSS quirks, animations or page
+		// length. Trade-off: a one-time browser permission dialog per capture.
+		async captureViaScreenShare() {
+			const confirmed = await this.showPermissionPrompt();
+			if (!confirmed) {
+				this.cancelCapture();
+				return;
+			}
+
+			// Hide our overlay so it isn't captured in the frame
+			this.overlay.classList.remove('is-active');
+			await new Promise(r => requestAnimationFrame(r));
+
+			let stream;
+			try {
+				stream = await navigator.mediaDevices.getDisplayMedia({
+					video: {
+						// Chrome-specific hints — pre-select current tab, hide screen/window
+						// options, allow self-capture. Other browsers ignore unknown keys.
+						preferCurrentTab: true,
+						selfBrowserSurface: 'include',
+						surfaceSwitching: 'exclude',
+						monitorTypeSurfaces: 'exclude',
+					},
+					audio: false,
+				});
+			} catch (e) {
+				console.warn('AGoodBug: getDisplayMedia denied/failed:', e);
+				this.cancelCapture();
+				this.screenshot = null;
+				this.screenshotFailed = true;
+				this.openModal();
+				return;
+			}
+
+			// Pull one frame from the stream
+			const video = document.createElement('video');
+			video.muted = true;
+			video.srcObject = stream;
+			await new Promise(r => video.onloadedmetadata = r);
+			await video.play();
+			await new Promise(r => requestAnimationFrame(r));
+
+			const fullCanvas = document.createElement('canvas');
+			fullCanvas.width  = video.videoWidth;
+			fullCanvas.height = video.videoHeight;
+			fullCanvas.getContext('2d').drawImage(video, 0, 0);
+
+			// Stop the stream — frees the indicator and the user's permission
+			stream.getTracks().forEach(t => t.stop());
+			video.srcObject = null;
+
+			// The captured frame matches the viewport (browser tab surface).
+			// Selection coords are clientX/Y → map directly with viewport scale.
+			const { startX, startY, endX, endY } = this.selection;
+			const scaleX = fullCanvas.width  / window.innerWidth;
+			const scaleY = fullCanvas.height / window.innerHeight;
+
+			const x = Math.min(startX, endX) * scaleX;
+			const y = Math.min(startY, endY) * scaleY;
+			const w = Math.abs(endX - startX) * scaleX;
+			const h = Math.abs(endY - startY) * scaleY;
+
+			const padding = 50 * scaleX;
+			const cropped = document.createElement('canvas');
+			cropped.width  = w + padding * 2;
+			cropped.height = h + padding * 2;
+			const ctx = cropped.getContext('2d');
+			ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+			ctx.fillRect(0, 0, cropped.width, cropped.height);
+			ctx.drawImage(
+				fullCanvas,
+				x - padding, y - padding, w + padding * 2, h + padding * 2,
+				0, 0, cropped.width, cropped.height
+			);
+			ctx.strokeStyle = '#ff6b35';
+			ctx.lineWidth   = 4 * scaleX;
+			ctx.strokeRect(padding, padding, w, h);
+
+			this.screenshot = cropped.toDataURL('image/png');
+			const selectionData = {
+				x: Math.min(startX, endX),
+				y: Math.min(startY, endY),
+				width:  Math.abs(endX - startX),
+				height: Math.abs(endY - startY),
+			};
+			this.cancelCapture();
+			this.selection = selectionData;
+			this.openModal();
+		}
+
 		// Capture screenshot
 		async captureScreenshot() {
+			// Prefer Screen Capture API when available — pixel-perfect and works
+			// regardless of CSS/animation quirks. Falls back to html2canvas below
+			// if the browser doesn't expose getDisplayMedia (older Safari, etc.).
+			if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+				return this.captureViaScreenShare();
+			}
+			return this.captureViaHtml2Canvas();
+		}
+
+		async captureViaHtml2Canvas() {
 			let restored = [];
 			let cssRestoreFns = [];
 			try {
