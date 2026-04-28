@@ -607,13 +607,15 @@
 
 				// Calculate selection in canvas coordinates.
 				// Selection uses clientX/clientY (viewport-relative) but html2canvas
-				// captures document.body, so add scroll offsets to map to canvas space.
+				// captures document.body. Use body.getBoundingClientRect() to translate —
+				// it reflects native scroll AND transform-based scroll (Lenis et al.).
 				const { startX, startY, endX, endY } = this.selection;
-				const scale = canvas.width / window.innerWidth;
-				const x = (Math.min(startX, endX) + window.scrollX) * scale;
-				const y = (Math.min(startY, endY) + window.scrollY) * scale;
-				const width = Math.abs(endX - startX) * scale;
-				const height = Math.abs(endY - startY) * scale;
+				const bodyRect = document.body.getBoundingClientRect();
+				const scale   = canvas.width / bodyRect.width;
+				const x       = (Math.min(startX, endX) - bodyRect.left) * scale;
+				const y       = (Math.min(startY, endY) - bodyRect.top)  * scale;
+				const width   = Math.abs(endX - startX) * scale;
+				const height  = Math.abs(endY - startY) * scale;
 
 				// Create cropped canvas with highlight
 				const croppedCanvas = document.createElement('canvas');
