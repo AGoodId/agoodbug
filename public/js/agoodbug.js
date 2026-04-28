@@ -583,20 +583,12 @@
 				// Patch color() functions in live document before html2canvas reads CSS
 				cssRestoreFns = await this.applyColorPatch();
 
-				// Capture only the visible viewport (avoids browser canvas size limits
-				// on long pages and works regardless of scroll mechanism). The body's
-				// bounding rect gives us the correct scroll offset for both native
-				// scroll and transform-based smooth scroll (Lenis et al.).
-				const bodyRect = document.body.getBoundingClientRect();
+				// Capture with html2canvas
 				const canvas = await html2canvas(document.body, {
 					useCORS: true,
 					allowTaint: false,
 					scale: window.devicePixelRatio || 1,
 					logging: false,
-					x: -bodyRect.left,
-					y: -bodyRect.top,
-					width: window.innerWidth,
-					height: window.innerHeight,
 				});
 
 				// Restore CSS patches and image sources
@@ -613,14 +605,25 @@
 					return;
 				}
 
-				// Selection coords are viewport-relative (clientX/clientY), and the
-				// canvas now matches the viewport — map directly with scale only.
+				// Selection uses clientX/clientY (viewport-relative); html2canvas
+				// captures the full body. Use bodyRect to translate viewport coords
+				// to canvas coords (works for both native scroll and transform scroll).
 				const { startX, startY, endX, endY } = this.selection;
-				const scale  = canvas.width / window.innerWidth;
-				const x      = Math.min(startX, endX) * scale;
-				const y      = Math.min(startY, endY) * scale;
-				const width  = Math.abs(endX - startX) * scale;
-				const height = Math.abs(endY - startY) * scale;
+				const bodyRect = document.body.getBoundingClientRect();
+				const scale    = canvas.width / bodyRect.width;
+				const x        = (Math.min(startX, endX) - bodyRect.left) * scale;
+				const y        = (Math.min(startY, endY) - bodyRect.top)  * scale;
+				const width    = Math.abs(endX - startX) * scale;
+				const height   = Math.abs(endY - startY) * scale;
+
+				// Debug log — paste this from the console when reporting issues
+				console.log('[AGoodBug debug]', {
+					canvas: { w: canvas.width, h: canvas.height },
+					bodyRect: { left: bodyRect.left, top: bodyRect.top, w: bodyRect.width, h: bodyRect.height },
+					window: { innerW: window.innerWidth, innerH: window.innerHeight, scrollX: window.scrollX, scrollY: window.scrollY, dpr: window.devicePixelRatio },
+					selection: { startX, startY, endX, endY },
+					crop: { x, y, width, height, scale },
+				});
 
 				// Create cropped canvas with highlight
 				const croppedCanvas = document.createElement('canvas');
