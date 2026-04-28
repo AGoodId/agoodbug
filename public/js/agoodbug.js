@@ -643,14 +643,10 @@
 
 		// Capture via the browser's Screen Capture API. Pixel-perfect — captures
 		// exactly what the user sees, regardless of CSS quirks, animations or page
-		// length. Trade-off: a one-time browser permission dialog per capture.
+		// length. Trade-off: the browser shows its own permission dialog.
+		// We rely on transient activation from the selection mouseup so no extra
+		// "Continue" click is needed.
 		async captureViaScreenShare() {
-			const confirmed = await this.showPermissionPrompt();
-			if (!confirmed) {
-				this.cancelCapture();
-				return;
-			}
-
 			// Hide our overlay so it isn't captured in the frame
 			this.overlay.classList.remove('is-active');
 			await new Promise(r => requestAnimationFrame(r));
