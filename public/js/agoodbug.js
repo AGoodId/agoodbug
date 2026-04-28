@@ -454,6 +454,28 @@
 			return restored;
 		}
 
+		// Force all elements visible before capture. GSAP/ScrollTrigger and similar
+		// libraries set opacity:0 / clip-path / visibility on elements as initial
+		// states for scroll-driven animations. The live DOM has these animated to
+		// visible states, but html2canvas clones into an iframe where the
+		// animations don't re-run — so any elements still relying on inline JS
+		// state appear blank. This CSS override beats inline styles via specificity
+		// + !important and is removed after capture.
+		applyVisibilityOverride() {
+			const style = document.createElement('style');
+			style.id = 'agoodbug-capture-overrides';
+			style.textContent = `
+				*, *::before, *::after {
+					opacity: 1 !important;
+					visibility: visible !important;
+					clip-path: none !important;
+					-webkit-clip-path: none !important;
+				}
+			`;
+			document.head.appendChild(style);
+			return () => style.remove();
+		}
+
 		// Patch color() CSS functions directly in the live document before html2canvas runs.
 		// html2canvas throws on color(display-p3 …) / color(srgb …) etc. because its own
 		// CSS parser doesn't support them. We convert each one to rgb() via a 1×1 canvas
@@ -582,6 +604,10 @@
 
 				// Patch color() functions in live document before html2canvas reads CSS
 				cssRestoreFns = await this.applyColorPatch();
+
+				// Force visibility — kills GSAP/ScrollTrigger-driven hidden states
+				// that html2canvas's clone iframe would otherwise capture as blank.
+				cssRestoreFns.push( this.applyVisibilityOverride() );
 
 				// Compute a safe scale: long pages produce huge canvases that hit
 				// browser limits (Safari ~16 megapixels, others vary) and only render
