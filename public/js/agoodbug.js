@@ -658,15 +658,15 @@
 			let stream;
 			try {
 				stream = await navigator.mediaDevices.getDisplayMedia({
-					video: {
-						// Chrome-specific hints — pre-select current tab, hide screen/window
-						// options, allow self-capture. Other browsers ignore unknown keys.
-						preferCurrentTab: true,
-						selfBrowserSurface: 'include',
-						surfaceSwitching: 'exclude',
-						monitorTypeSurfaces: 'exclude',
-					},
+					video: true,
 					audio: false,
+					// These options must be top-level on the options object (not in video).
+					// On Chrome 109+ preferCurrentTab triggers a simple "share this tab?"
+					// confirmation instead of the full picker. Other browsers ignore unknowns.
+					preferCurrentTab: true,
+					selfBrowserSurface: 'include',
+					surfaceSwitching: 'exclude',
+					monitorTypeSurfaces: 'exclude',
 				});
 			} catch (e) {
 				console.warn('AGoodBug: getDisplayMedia denied/failed:', e);
