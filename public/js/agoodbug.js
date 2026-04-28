@@ -634,6 +634,16 @@
 					crop: { x, y, width, height, scale },
 				});
 
+				// Debug mode: skip cropping and use the entire raw html2canvas output
+				// as the screenshot. Add ?agoodbug-debug-full to the URL to enable.
+				// This lets us verify whether html2canvas itself is rendering correctly.
+				if ( window.location.search.indexOf('agoodbug-debug-full') !== -1 ) {
+					this.screenshot = canvas.toDataURL('image/png');
+					this.cancelCapture();
+					this.openModal();
+					return;
+				}
+
 				// Create cropped canvas with highlight
 				const croppedCanvas = document.createElement('canvas');
 				const padding = 50 * scale;
