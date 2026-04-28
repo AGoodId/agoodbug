@@ -583,12 +583,20 @@
 				// Patch color() functions in live document before html2canvas reads CSS
 				cssRestoreFns = await this.applyColorPatch();
 
-				// Capture with html2canvas
+				// Capture only the visible viewport (avoids browser canvas size limits
+				// on long pages and works regardless of scroll mechanism). The body's
+				// bounding rect gives us the correct scroll offset for both native
+				// scroll and transform-based smooth scroll (Lenis et al.).
+				const bodyRect = document.body.getBoundingClientRect();
 				const canvas = await html2canvas(document.body, {
 					useCORS: true,
 					allowTaint: false,
 					scale: window.devicePixelRatio || 1,
 					logging: false,
+					x: -bodyRect.left,
+					y: -bodyRect.top,
+					width: window.innerWidth,
+					height: window.innerHeight,
 				});
 
 				// Restore CSS patches and image sources
@@ -605,17 +613,14 @@
 					return;
 				}
 
-				// Calculate selection in canvas coordinates.
-				// Selection uses clientX/clientY (viewport-relative) but html2canvas
-				// captures document.body. Use body.getBoundingClientRect() to translate —
-				// it reflects native scroll AND transform-based scroll (Lenis et al.).
+				// Selection coords are viewport-relative (clientX/clientY), and the
+				// canvas now matches the viewport — map directly with scale only.
 				const { startX, startY, endX, endY } = this.selection;
-				const bodyRect = document.body.getBoundingClientRect();
-				const scale   = canvas.width / bodyRect.width;
-				const x       = (Math.min(startX, endX) - bodyRect.left) * scale;
-				const y       = (Math.min(startY, endY) - bodyRect.top)  * scale;
-				const width   = Math.abs(endX - startX) * scale;
-				const height  = Math.abs(endY - startY) * scale;
+				const scale  = canvas.width / window.innerWidth;
+				const x      = Math.min(startX, endX) * scale;
+				const y      = Math.min(startY, endY) * scale;
+				const width  = Math.abs(endX - startX) * scale;
+				const height = Math.abs(endY - startY) * scale;
 
 				// Create cropped canvas with highlight
 				const croppedCanvas = document.createElement('canvas');
