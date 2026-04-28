@@ -605,11 +605,13 @@
 					return;
 				}
 
-				// Calculate selection in canvas coordinates
+				// Calculate selection in canvas coordinates.
+				// Selection uses clientX/clientY (viewport-relative) but html2canvas
+				// captures document.body, so add scroll offsets to map to canvas space.
 				const { startX, startY, endX, endY } = this.selection;
 				const scale = canvas.width / window.innerWidth;
-				const x = Math.min(startX, endX) * scale;
-				const y = Math.min(startY, endY) * scale;
+				const x = (Math.min(startX, endX) + window.scrollX) * scale;
+				const y = (Math.min(startY, endY) + window.scrollY) * scale;
 				const width = Math.abs(endX - startX) * scale;
 				const height = Math.abs(endY - startY) * scale;
 
