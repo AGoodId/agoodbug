@@ -612,29 +612,33 @@
 		// Fortsätt, false if Avbryt or backdrop click.
 		showPermissionPrompt() {
 			return new Promise((resolve) => {
+				const title  = strings.permissionTitle  || 'Tillåtelse krävs';
+				const body   = strings.permissionBody   || 'Vi behöver din tillåtelse att fånga skärmen. Klicka "Dela" i nästa dialog.';
+				const cancel = strings.cancelButton     || 'Avbryt';
+				const cont   = strings.continueButton   || 'Fortsätt';
 				const prompt = document.createElement('div');
 				prompt.className = 'agoodbug-permission';
 				prompt.innerHTML = `
 					<div class="agoodbug-permission__backdrop"></div>
 					<div class="agoodbug-permission__box">
-						<h3>${this.escapeHtml(this.strings.permissionTitle || 'Tillåtelse krävs')}</h3>
-						<p>${this.escapeHtml(this.strings.permissionBody || 'Vi behöver din tillåtelse att fånga skärmen. Klicka "Dela" i nästa dialog.')}</p>
+						<h3></h3>
+						<p></p>
 						<div class="agoodbug-permission__actions">
-							<button type="button" class="agoodbug-permission__cancel">${this.escapeHtml(this.strings.cancelButton || 'Avbryt')}</button>
-							<button type="button" class="agoodbug-permission__confirm">${this.escapeHtml(this.strings.continueButton || 'Fortsätt')}</button>
+							<button type="button" class="agoodbug-permission__cancel"></button>
+							<button type="button" class="agoodbug-permission__confirm"></button>
 						</div>
 					</div>
 				`;
+				prompt.querySelector('h3').textContent = title;
+				prompt.querySelector('p').textContent = body;
+				prompt.querySelector('.agoodbug-permission__cancel').textContent = cancel;
+				prompt.querySelector('.agoodbug-permission__confirm').textContent = cont;
 				document.body.appendChild(prompt);
 				const close = (val) => { prompt.remove(); resolve(val); };
 				prompt.querySelector('.agoodbug-permission__cancel').onclick = () => close(false);
 				prompt.querySelector('.agoodbug-permission__backdrop').onclick = () => close(false);
 				prompt.querySelector('.agoodbug-permission__confirm').onclick = () => close(true);
 			});
-		}
-
-		escapeHtml(str) {
-			return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 		}
 
 		// Capture via the browser's Screen Capture API. Pixel-perfect — captures
