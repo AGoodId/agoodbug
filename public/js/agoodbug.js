@@ -454,21 +454,44 @@
 			return restored;
 		}
 
-		// Defeat GSAP/ScrollTrigger initial-hidden states for elements that haven't
-		// scrolled into view in the cloned iframe. Only override opacity (the
-		// common fade-in trick) — keep visibility/display alone so we don't reveal
-		// genuinely hidden UI like cookie banners, dropdowns or our own modal.
+		// Defeat GSAP/ScrollTrigger initial-hidden states. Animation libraries set
+		// opacity:0 + visibility:hidden + clip-path on elements as initial states
+		// for scroll-driven reveals. Override all three. Genuinely hidden UI
+		// (cookie banners, modals, our own widget) uses display:none or
+		// aria-hidden/hidden — those stay hidden via the explicit excludes below.
 		applyVisibilityOverride() {
 			const style = document.createElement('style');
 			style.id = 'agoodbug-capture-overrides';
 			style.textContent = `
-				*, *::before, *::after { opacity: 1 !important; }
+				*, *::before, *::after {
+					opacity: 1 !important;
+					visibility: visible !important;
+					clip-path: none !important;
+					-webkit-clip-path: none !important;
+				}
 				.agoodbug-overlay,
 				.agoodbug-modal,
 				.agoodbug-button,
-				.agoodbug-tab { display: none !important; }
+				.agoodbug-tab,
+				[aria-hidden="true"],
+				[hidden] { display: none !important; }
 			`;
 			document.head.appendChild(style);
+
+			// Best-effort: fast-forward GSAP/ScrollTrigger animations to their end
+			// state in the live DOM before capture, so the cloned iframe inherits
+			// completed final states (transform: translateY(0), height: auto, etc.)
+			// rather than initial hidden states.
+			try {
+				if ( window.ScrollTrigger && typeof window.ScrollTrigger.getAll === 'function' ) {
+					window.ScrollTrigger.getAll().forEach(t => {
+						if ( t.animation && typeof t.animation.progress === 'function' ) {
+							t.animation.progress(1);
+						}
+					});
+				}
+			} catch (e) {}
+
 			return () => style.remove();
 		}
 
