@@ -20,6 +20,11 @@ class REST_API {
 	const RATE_LIMIT_PREFIX = 'agoodbug_rate_';
 
 	/**
+	 * Submission dedupe transient prefix.
+	 */
+	const SUBMISSION_PREFIX = 'agoodbug_submission_';
+
+	/**
 	 * Initialize
 	 */
 	public function init() {
@@ -273,13 +278,10 @@ class REST_API {
 	 * @return \WP_REST_Response|\WP_Error
 	 */
 	public function submit_feedback( $request ) {
-		try {
-			// Check rate limit
-			$rate_check = $this->check_rate_limit();
-			if ( is_wp_error( $rate_check ) ) {
-				return $rate_check;
-			}
+		$lock_key    = '';
+		$lock_option = '';
 
+		try {
 			$data = [
 				'feedback_type'     => $request->get_param( 'feedback_type' ) ?: 'screenshot',
 				'screenshot'        => $request->get_param( 'screenshot' ),
@@ -302,8 +304,59 @@ class REST_API {
 				'cookies_enabled'   => $request->get_param( 'cookies_enabled' ),
 			];
 
+			$fingerprint = $this->build_submission_fingerprint( $data );
+			$lock_key    = self::SUBMISSION_PREFIX . $fingerprint;
+			$lock_option = '_agoodbug_submission_lock_' . $fingerprint;
+			$existing    = get_transient( $lock_key );
+
+			if ( is_array( $existing ) ) {
+				return rest_ensure_response( [
+					'success'      => true,
+					'duplicate'    => true,
+					'feedback_id'  => absint( $existing['post_id'] ?? 0 ),
+					'destinations' => $existing['destinations'] ?? [],
+				] );
+			}
+
+			if ( $existing === 'processing' ) {
+				return rest_ensure_response( [
+					'success'   => true,
+					'duplicate' => true,
+				] );
+			}
+
+			if ( ! add_option( $lock_option, time(), '', 'no' ) ) {
+				$locked_at = (int) get_option( $lock_option );
+				if ( $locked_at > 0 && $locked_at < time() - ( 10 * MINUTE_IN_SECONDS ) ) {
+					delete_option( $lock_option );
+					if ( ! add_option( $lock_option, time(), '', 'no' ) ) {
+						return rest_ensure_response( [
+							'success'   => true,
+							'duplicate' => true,
+						] );
+					}
+				} else {
+					return rest_ensure_response( [
+						'success'   => true,
+						'duplicate' => true,
+					] );
+				}
+			}
+
+			// Check rate limit only for new submissions, not duplicate retries.
+			$rate_check = $this->check_rate_limit();
+			if ( is_wp_error( $rate_check ) ) {
+				delete_option( $lock_option );
+				return $rate_check;
+			}
+
+			set_transient( $lock_key, 'processing', 2 * MINUTE_IN_SECONDS );
+			$data['submission_fingerprint'] = $fingerprint;
+
 			// Validate screenshot data only if provided
 			if ( ! empty( $data['screenshot'] ) && strpos( $data['screenshot'], 'data:image/' ) !== 0 ) {
+				delete_transient( $lock_key );
+				delete_option( $lock_option );
 				return new \WP_Error(
 					'invalid_screenshot',
 					__( 'Invalid screenshot format.', 'agoodbug' ),
@@ -319,6 +372,8 @@ class REST_API {
 			$post_id = Feedback_CPT::create_feedback( $data );
 
 			if ( is_wp_error( $post_id ) ) {
+				delete_transient( $lock_key );
+				delete_option( $lock_option );
 				return $post_id;
 			}
 
@@ -373,6 +428,11 @@ class REST_API {
 
 			// Save destination results
 			update_post_meta( $post_id, '_destination_results', wp_json_encode( $results ) );
+			set_transient( $lock_key, [
+				'post_id'      => $post_id,
+				'destinations' => $results,
+			], 10 * MINUTE_IN_SECONDS );
+			delete_option( $lock_option );
 
 			return rest_ensure_response( [
 				'success'      => true,
@@ -380,6 +440,12 @@ class REST_API {
 				'destinations' => $results,
 			] );
 		} catch ( \Exception $e ) {
+			if ( ! empty( $lock_key ) ) {
+				delete_transient( $lock_key );
+			}
+			if ( ! empty( $lock_option ) ) {
+				delete_option( $lock_option );
+			}
 			error_log( 'AGoodBug - Submit feedback error: ' . $e->getMessage() );
 			return new \WP_Error(
 				'submit_error',
@@ -387,6 +453,12 @@ class REST_API {
 				[ 'status' => 500 ]
 			);
 		} catch ( \Error $e ) {
+			if ( ! empty( $lock_key ) ) {
+				delete_transient( $lock_key );
+			}
+			if ( ! empty( $lock_option ) ) {
+				delete_option( $lock_option );
+			}
 			error_log( 'AGoodBug - Submit feedback fatal error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
 			return new \WP_Error(
 				'fatal_error',
@@ -394,6 +466,30 @@ class REST_API {
 				[ 'status' => 500 ]
 			);
 		}
+	}
+
+	/**
+	 * Build a stable fingerprint for one user submission.
+	 *
+	 * @param array $data Feedback data.
+	 * @return string
+	 */
+	private function build_submission_fingerprint( $data ) {
+		$user_id = get_current_user_id();
+
+		$normalized = [
+			'user_id'       => $user_id,
+			'email'         => sanitize_email( $data['email'] ?? '' ),
+			'feedback_type' => sanitize_text_field( $data['feedback_type'] ?? 'screenshot' ),
+			'url'           => esc_url_raw( $data['url'] ?? '' ),
+			'comment'       => trim( sanitize_textarea_field( $data['comment'] ?? '' ) ),
+			'selection'     => sanitize_text_field( $data['selection'] ?? '' ),
+			'viewport'      => sanitize_text_field( $data['viewport'] ?? '' ),
+			'browser'       => sanitize_text_field( $data['browser'] ?? '' ),
+			'screenshot'    => ! empty( $data['screenshot'] ) ? hash( 'sha256', $data['screenshot'] ) : '',
+		];
+
+		return hash( 'sha256', wp_json_encode( $normalized ) );
 	}
 
 	/**

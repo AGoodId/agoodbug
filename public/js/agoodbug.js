@@ -15,6 +15,7 @@
 			if (!this.container) return;
 
 			this.isCapturing = false;
+			this.isSubmitting = false;
 			this.selection = null;
 			this.screenshot = null;
 			this.feedbackMode = null; // 'general' or 'screenshot'
@@ -890,6 +891,9 @@
 			}
 
 			this.commentField.value = '';
+			this.isSubmitting = false;
+			this.submitBtn.disabled = false;
+			this.submitBtn.textContent = strings.submitButton;
 			this.modal.classList.add('is-open');
 			this.showForm();
 			this.commentField.focus();
@@ -900,6 +904,9 @@
 			this.modal.classList.remove('is-open');
 			this.screenshot = null;
 			this.screenshotFailed = false;
+			this.isSubmitting = false;
+			this.submitBtn.disabled = false;
+			this.submitBtn.textContent = strings.submitButton;
 			document.body.style.overflow = '';
 		}
 
@@ -926,6 +933,8 @@
 
 		// Submit feedback
 		async submitFeedback() {
+			if (this.isSubmitting) return;
+
 			const comment = this.commentField.value.trim();
 			const email = this.emailField ? this.emailField.value.trim() : '';
 
@@ -946,6 +955,7 @@
 				this.emailField.classList.remove('is-error');
 			}
 			this.commentField.classList.remove('is-error');
+			this.isSubmitting = true;
 			this.submitBtn.disabled = true;
 			this.submitBtn.textContent = strings.sending;
 
@@ -998,7 +1008,7 @@
 			} catch (error) {
 				console.error('Submit failed:', error);
 				this.showError();
-			} finally {
+				this.isSubmitting = false;
 				this.submitBtn.disabled = false;
 				this.submitBtn.textContent = strings.submitButton;
 			}

@@ -30,6 +30,22 @@ class AGoodMember {
 		$api_url    = self::API_URL;
 		$api_key    = $settings['agoodmember_token'] ?? '';
 		$project_id = $settings['agoodmember_project_id'] ?? '';
+		$existing_task_number = $post_id ? get_post_meta( $post_id, '_agoodmember_task_number', true ) : '';
+
+		if ( ! empty( $existing_task_number ) ) {
+			error_log( 'AGoodBug - AGoodMember: Reusing existing task ' . $existing_task_number . ' for report #' . $post_id );
+			return $existing_task_number;
+		}
+
+		if ( $post_id ) {
+			$destination_results = json_decode( get_post_meta( $post_id, '_destination_results', true ), true );
+			$legacy_task_number  = is_array( $destination_results ) ? ( $destination_results['agoodmember'] ?? '' ) : '';
+			if ( is_string( $legacy_task_number ) && $legacy_task_number !== '' ) {
+				update_post_meta( $post_id, '_agoodmember_task_number', sanitize_text_field( $legacy_task_number ) );
+				error_log( 'AGoodBug - AGoodMember: Reusing legacy task ' . $legacy_task_number . ' for report #' . $post_id );
+				return $legacy_task_number;
+			}
+		}
 
 		if ( empty( $api_key ) ) {
 			$this->log_error( $post_id, 'Missing API key' );
@@ -62,6 +78,8 @@ class AGoodMember {
 			'tags'        => [ 'agoodbug', 'frontend' ],
 			'source'      => 'agoodbug',
 			'source_url'  => $data['url'] ?? '',
+			'source_id'   => $post_id ? 'agoodbug:' . $post_id : '',
+			'external_id' => $post_id ? 'agoodbug:' . $post_id : '',
 		];
 
 		if ( ! empty( $project_id ) ) {
@@ -100,6 +118,15 @@ class AGoodMember {
 		}
 
 		$task_number = $body['task']['task_number'];
+		$task_id     = $body['task']['id'] ?? '';
+
+		if ( $post_id ) {
+			update_post_meta( $post_id, '_agoodmember_task_number', '#' . $task_number );
+			if ( ! empty( $task_id ) ) {
+				update_post_meta( $post_id, '_agoodmember_task_id', sanitize_text_field( $task_id ) );
+			}
+		}
+
 		error_log( 'AGoodBug - AGoodMember: Task created #' . $task_number . ' with notes' );
 
 		return '#' . $task_number;

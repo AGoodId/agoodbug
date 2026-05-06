@@ -99,6 +99,9 @@ class Feedback_CPT {
 			'_reporter_name'       => 'string',
 			'_reporter_email'      => 'string',
 			'_destination_results' => 'string',
+			'_submission_fingerprint' => 'string',
+			'_agoodmember_task_number' => 'string',
+			'_agoodmember_task_id' => 'string',
 			// Extended device info
 			'_device_type'         => 'string',
 			'_screen_resolution'   => 'string',
@@ -628,6 +631,7 @@ class Feedback_CPT {
 		update_post_meta( $post_id, '_reporter_id', $reporter_id );
 		update_post_meta( $post_id, '_reporter_name', $reporter_name );
 		update_post_meta( $post_id, '_reporter_email', $reporter_email );
+		update_post_meta( $post_id, '_submission_fingerprint', sanitize_text_field( $data['submission_fingerprint'] ?? '' ) );
 
 		// Extended device info
 		update_post_meta( $post_id, '_device_type', sanitize_text_field( $data['device_type'] ?? '' ) );
