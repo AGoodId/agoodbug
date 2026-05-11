@@ -63,8 +63,11 @@ class AGoodMember {
 			$title = sprintf( '%s: %s', $title_prefix, wp_parse_url( $data['url'], PHP_URL_PATH ) ?: '/' );
 		}
 
-		// Build notes HTML
-		$notes_html = $this->build_notes_html( $data, $screenshot_url );
+		$has_screenshot_data = ! empty( $data['screenshot'] ) && strpos( $data['screenshot'], 'data:image/' ) === 0;
+
+		// Build notes HTML. When we have raw screenshot data, AGoodMember stores it
+		// and rewrites notes to a stable storage URL. Do not embed the local WP URL.
+		$notes_html = $this->build_notes_html( $data, $has_screenshot_data ? '' : $screenshot_url );
 
 		// Create task with notes in a single POST
 		$task_data = [
@@ -81,6 +84,12 @@ class AGoodMember {
 			'source_id'   => $post_id ? 'agoodbug:' . $post_id : '',
 			'external_id' => $post_id ? 'agoodbug:' . $post_id : '',
 		];
+
+		if ( $has_screenshot_data ) {
+			$task_data['screenshot']           = $data['screenshot'];
+			$task_data['screenshot_filename']  = $post_id ? 'agoodbug-screenshot-' . $post_id . '.png' : 'agoodbug-screenshot.png';
+			$task_data['screenshot_mime_type'] = 'image/png';
+		}
 
 		if ( ! empty( $project_id ) ) {
 			$task_data['project_id'] = $project_id;
