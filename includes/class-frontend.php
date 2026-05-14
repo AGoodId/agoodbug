@@ -84,6 +84,9 @@ class Frontend {
 		wp_localize_script( 'agoodbug', 'agoodbugConfig', [
 			'apiUrl'         => rest_url( 'agoodbug/v1/feedback' ),
 			'proxyUrl'       => rest_url( 'agoodbug/v1/proxy' ),
+			'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
+			'ajaxAction'     => 'agoodbug_submit_feedback',
+			'ajaxNonce'      => wp_create_nonce( 'agoodbug_submit_feedback' ),
 			'nonce'          => wp_create_nonce( 'wp_rest' ),
 			'isLoggedIn'     => is_user_logged_in(),
 			'userEmail'      => $user_email,

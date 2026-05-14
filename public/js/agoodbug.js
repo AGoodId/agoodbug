@@ -211,7 +211,7 @@
 							<line x1="15" y1="9" x2="9" y2="15"/>
 							<line x1="9" y1="9" x2="15" y2="15"/>
 						</svg>
-						<p>${strings.error}</p>
+						<p class="agoodbug-modal__error-message">${strings.error}</p>
 						<button type="button" class="agoodbug-modal__retry">${strings.retryButton}</button>
 					</div>
 				</div>
@@ -224,6 +224,7 @@
 			this.submitBtn = this.modal.querySelector('.agoodbug-modal__submit');
 			this.successPanel = this.modal.querySelector('.agoodbug-modal__success');
 			this.errorPanel = this.modal.querySelector('.agoodbug-modal__error');
+			this.errorMessage = this.modal.querySelector('.agoodbug-modal__error-message');
 
 			// Pre-fill email: logged-in user email > localStorage > empty
 			if (this.emailField) {
@@ -924,11 +925,95 @@
 			this.errorPanel.hidden = true;
 		}
 
-		showError() {
+		showError(message) {
 			this.modal.querySelector('.agoodbug-modal__body').hidden = true;
 			this.modal.querySelector('.agoodbug-modal__actions').hidden = true;
 			this.successPanel.hidden = true;
+			if (this.errorMessage) {
+				this.errorMessage.textContent = message || strings.error;
+			}
 			this.errorPanel.hidden = false;
+		}
+
+		getFeedbackApiUrls() {
+			const urls = [];
+
+			if (config.apiUrl) {
+				urls.push(config.apiUrl);
+			}
+
+			if (window.location.origin) {
+				urls.push(`${window.location.origin}/wp-json/agoodbug/v1/feedback`);
+			}
+
+			return [...new Set(urls)];
+		}
+
+		async postFeedback(data) {
+			let lastError = null;
+
+			for (const url of this.getFeedbackApiUrls()) {
+				const response = await fetch(url, {
+					method: 'POST',
+					credentials: 'same-origin',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-WP-Nonce': config.nonce || ''
+					},
+					body: JSON.stringify(data)
+				});
+
+				const result = await response.json().catch(() => ({}));
+
+				if (response.ok && result.success) {
+					return result;
+				}
+
+				lastError = new Error(result.message || result.code || `HTTP ${response.status}`);
+				lastError.status = response.status;
+				lastError.code = result.code || '';
+
+				if (lastError.code !== 'rest_no_route') {
+					throw lastError;
+				}
+			}
+
+			if (lastError && (lastError.code === 'rest_no_route' || lastError.status === 404)) {
+				return this.postFeedbackViaAjax(data);
+			}
+
+			throw lastError || new Error('Unknown error');
+		}
+
+		async postFeedbackViaAjax(data) {
+			if (!config.ajaxUrl || !config.ajaxAction || !config.ajaxNonce) {
+				throw new Error(strings.error || 'Unknown error');
+			}
+
+			const url = new URL(config.ajaxUrl, window.location.href);
+			url.searchParams.set('action', config.ajaxAction);
+			url.searchParams.set('nonce', config.ajaxNonce);
+
+			const response = await fetch(url.toString(), {
+				method: 'POST',
+				credentials: 'same-origin',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(data)
+			});
+
+			const result = await response.json().catch(() => ({}));
+
+			if (response.ok && result.success) {
+				return result;
+			}
+
+			const message = result.message || result.data?.message || result.data?.code || `HTTP ${response.status}`;
+			const error = new Error(message);
+			error.status = response.status;
+			error.code = result.code || result.data?.code || '';
+			throw error;
 		}
 
 		// Submit feedback
@@ -988,26 +1073,12 @@
 			};
 
 			try {
-				const response = await fetch(config.apiUrl, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'X-WP-Nonce': config.nonce
-					},
-					body: JSON.stringify(data)
-				});
-
-				const result = await response.json();
-
-				if (response.ok && result.success) {
-					this.showSuccess();
-				} else {
-					throw new Error(result.message || 'Unknown error');
-				}
+				await this.postFeedback(data);
+				this.showSuccess();
 
 			} catch (error) {
 				console.error('Submit failed:', error);
-				this.showError();
+				this.showError(error.message);
 				this.isSubmitting = false;
 				this.submitBtn.disabled = false;
 				this.submitBtn.textContent = strings.submitButton;

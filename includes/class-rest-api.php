@@ -29,6 +29,8 @@ class REST_API {
 	 */
 	public function init() {
 		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'wp_ajax_agoodbug_submit_feedback', [ $this, 'ajax_submit_feedback' ] );
+		add_action( 'wp_ajax_nopriv_agoodbug_submit_feedback', [ $this, 'ajax_submit_feedback' ] );
 	}
 
 	/**
@@ -230,6 +232,66 @@ class REST_API {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Submit feedback via admin-ajax as a fallback when REST routing is unavailable.
+	 *
+	 * @return void
+	 */
+	public function ajax_submit_feedback() {
+		$nonce = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
+
+		if ( empty( $nonce ) || ! wp_verify_nonce( $nonce, 'agoodbug_submit_feedback' ) ) {
+			wp_send_json_error(
+				[
+					'code'    => 'invalid_nonce',
+					'message' => __( 'Security check failed.', 'agoodbug' ),
+				],
+				403
+			);
+		}
+
+		$permission_check = $this->check_permissions();
+		if ( is_wp_error( $permission_check ) ) {
+			$error_data = $permission_check->get_error_data();
+			wp_send_json_error(
+				[
+					'code'    => $permission_check->get_error_code(),
+					'message' => $permission_check->get_error_message(),
+				],
+				(int) ( is_array( $error_data ) && isset( $error_data['status'] ) ? $error_data['status'] : 403 )
+			);
+		}
+
+		$raw_body = file_get_contents( 'php://input' );
+		$data     = json_decode( $raw_body, true );
+
+		if ( ! is_array( $data ) ) {
+			$data = wp_unslash( $_POST );
+			unset( $data['action'], $data['nonce'] );
+		}
+
+		$request = new \WP_REST_Request( 'POST', '/' . self::NAMESPACE . '/feedback' );
+		foreach ( $data as $key => $value ) {
+			$request->set_param( $key, $value );
+		}
+
+		$result = $this->submit_feedback( $request );
+
+		if ( is_wp_error( $result ) ) {
+			$error_data = $result->get_error_data();
+			wp_send_json_error(
+				[
+					'code'    => $result->get_error_code(),
+					'message' => $result->get_error_message(),
+				],
+				(int) ( is_array( $error_data ) && isset( $error_data['status'] ) ? $error_data['status'] : 500 )
+			);
+		}
+
+		$response = rest_ensure_response( $result );
+		wp_send_json( $response->get_data(), $response->get_status() );
 	}
 
 	/**
