@@ -63,10 +63,25 @@ class Plugin {
 	 * Initialize network admin (multisite only)
 	 */
 	private function init_network_admin() {
-		if ( is_multisite() && is_network_admin() ) {
+		if ( is_multisite() && ( is_network_admin() || $this->is_network_settings_ajax() ) ) {
 			$network_settings = new Network_Settings();
 			$network_settings->init();
 		}
+	}
+
+	/**
+	 * Check whether the current AJAX request targets the network settings page.
+	 *
+	 * @return bool
+	 */
+	private function is_network_settings_ajax() {
+		if ( ! wp_doing_ajax() ) {
+			return false;
+		}
+
+		$action = isset( $_REQUEST['action'] ) ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : '';
+
+		return strpos( $action, 'agoodbug_network_' ) === 0;
 	}
 
 	/**
