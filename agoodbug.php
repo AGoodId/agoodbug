@@ -3,7 +3,7 @@
  * Plugin Name: AGoodBug
  * Plugin URI: https://github.com/AGoodId/agoodbug
  * Description: Visual feedback and bug reporting widget with screenshot capture.
- * Version: 1.8.30
+ * Version: 1.8.31
  * Author: AGoodId
  * Author URI: https://agoodid.se
  * License: GPL-2.0+
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'AGOODBUG_VERSION', '1.8.30' );
+define( 'AGOODBUG_VERSION', '1.8.31' );
 define( 'AGOODBUG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -113,6 +113,13 @@ function get_default_settings() {
 		'agoodmember_enabled'    => false,
 		'agoodmember_token'      => '',
 		'agoodmember_project_id' => '',
+		'asana_enabled'          => false,
+		'asana_token'            => '',
+		'asana_workspace_gid'    => '',
+		'asana_project_gid'      => '',
+		'asana_section_gid'      => '',
+		'asana_assignee_gid'     => '',
+		'asana_task_prefix'      => '',
 		'rate_limit'             => 10,
 		'max_screenshot_size'    => 5 * 1024 * 1024,
 	];

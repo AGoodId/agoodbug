@@ -20,6 +20,7 @@ class Network_Settings {
 		add_action( 'network_admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'wp_ajax_agoodbug_network_test_agoodmember', [ $this, 'ajax_test_agoodmember' ] );
 		add_action( 'wp_ajax_agoodbug_network_test_slack', [ $this, 'ajax_test_slack' ] );
+		add_action( 'wp_ajax_agoodbug_network_test_asana', [ $this, 'ajax_test_asana' ] );
 	}
 
 	/**
@@ -79,7 +80,7 @@ class Network_Settings {
 	 */
 	private function sanitize( array $input ): array {
 		$allowed_styles       = [ 'button', 'tab-bottom', 'tab-side' ];
-		$allowed_destinations = [ 'cpt', 'email', 'slack', 'checkvist', 'agoodmember' ];
+		$allowed_destinations = [ 'cpt', 'email', 'slack', 'checkvist', 'agoodmember', 'asana' ];
 
 		return [
 			'enabled'                => ! empty( $input['enabled'] ),
@@ -111,6 +112,14 @@ class Network_Settings {
 			'agoodmember_enabled'    => ! empty( $input['agoodmember_enabled'] ),
 			'agoodmember_token'      => sanitize_text_field( $input['agoodmember_token'] ?? '' ),
 			'agoodmember_project_id' => sanitize_text_field( $input['agoodmember_project_id'] ?? '' ),
+			// Asana
+			'asana_enabled'          => ! empty( $input['asana_enabled'] ),
+			'asana_token'            => sanitize_text_field( $input['asana_token'] ?? '' ),
+			'asana_workspace_gid'    => sanitize_text_field( $input['asana_workspace_gid'] ?? '' ),
+			'asana_project_gid'      => sanitize_text_field( $input['asana_project_gid'] ?? '' ),
+			'asana_section_gid'      => sanitize_text_field( $input['asana_section_gid'] ?? '' ),
+			'asana_assignee_gid'     => sanitize_text_field( $input['asana_assignee_gid'] ?? '' ),
+			'asana_task_prefix'      => sanitize_text_field( $input['asana_task_prefix'] ?? '' ),
 		];
 	}
 
@@ -137,6 +146,13 @@ class Network_Settings {
 			'agoodmember_enabled'    => false,
 			'agoodmember_token'      => '',
 			'agoodmember_project_id' => '',
+			'asana_enabled'          => false,
+			'asana_token'            => '',
+			'asana_workspace_gid'    => '',
+			'asana_project_gid'      => '',
+			'asana_section_gid'      => '',
+			'asana_assignee_gid'     => '',
+			'asana_task_prefix'      => '',
 		];
 
 		$saved = get_site_option( self::OPTION_NAME, [] );
@@ -231,6 +247,63 @@ class Network_Settings {
 		}
 
 		wp_send_json_success( __( 'Slack-meddelande skickat!', 'agoodbug' ) );
+	}
+
+	/**
+	 * AJAX: test Asana connection using saved network settings
+	 */
+	public function ajax_test_asana() {
+		check_ajax_referer( 'agoodbug_network_test_asana' );
+
+		if ( ! current_user_can( 'manage_network_options' ) ) {
+			wp_send_json_error( __( 'Behörighet saknas.', 'agoodbug' ) );
+		}
+
+		$settings    = self::get_settings();
+		$token       = $settings['asana_token'] ?? '';
+		$project_gid = $settings['asana_project_gid'] ?? '';
+
+		if ( empty( $token ) ) {
+			wp_send_json_error( __( 'Asana token saknas — spara inställningarna först.', 'agoodbug' ) );
+		}
+
+		$response = wp_remote_get( \AGoodBug\Integrations\Asana::API_URL . '/users/me', [
+			'headers' => [
+				'Authorization' => 'Bearer ' . $token,
+				'Accept'        => 'application/json',
+			],
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( $response->get_error_message() );
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code === 401 || $code === 403 ) {
+			wp_send_json_error( __( 'Ogiltig Asana token.', 'agoodbug' ) );
+		}
+		if ( $code < 200 || $code >= 300 ) {
+			wp_send_json_error( sprintf( __( 'Asana svarade med HTTP %d.', 'agoodbug' ), $code ) );
+		}
+
+		$message = __( 'Anslutningen fungerar!', 'agoodbug' );
+
+		if ( ! empty( $project_gid ) ) {
+			$project_response = wp_remote_get( \AGoodBug\Integrations\Asana::API_URL . '/projects/' . rawurlencode( $project_gid ), [
+				'headers' => [
+					'Authorization' => 'Bearer ' . $token,
+					'Accept'        => 'application/json',
+				],
+				'timeout' => 15,
+			] );
+			$project_code = wp_remote_retrieve_response_code( $project_response );
+			$message = ( $project_code >= 200 && $project_code < 300 )
+				? __( 'Anslutningen fungerar! Projektet hittades.', 'agoodbug' )
+				: __( 'Token fungerar, men projektet kunde inte verifieras.', 'agoodbug' );
+		}
+
+		wp_send_json_success( $message );
 	}
 
 	/**
@@ -352,6 +425,7 @@ class Network_Settings {
 								'slack'       => __( 'Slack', 'agoodbug' ),
 								'checkvist'   => __( 'Checkvist', 'agoodbug' ),
 								'agoodmember' => __( 'AGoodMember', 'agoodbug' ),
+								'asana'       => __( 'Asana', 'agoodbug' ),
 							];
 							foreach ( $destination_options as $value => $label ) :
 								?>
@@ -442,6 +516,51 @@ class Network_Settings {
 							<input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_project_id]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_project_id'] ); ?>" class="regular-text" />
 							<p>
 								<button type="button" class="button agoodbug-test-btn" data-action="agoodbug_network_test_agoodmember" data-nonce="<?php echo esc_attr( wp_create_nonce( 'agoodbug_network_test_agoodmember' ) ); ?>">
+									<?php esc_html_e( 'Testa anslutning', 'agoodbug' ); ?>
+								</button>
+								<span class="agoodbug-test-result" style="margin-left:8px;"></span>
+							</p>
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'Asana', 'agoodbug' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Enable Asana', 'agoodbug' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[asana_enabled]' ); ?>" value="1" <?php checked( $settings['asana_enabled'] ); ?> />
+								<?php esc_html_e( 'Send reports to Asana.', 'agoodbug' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Asana Token', 'agoodbug' ); ?></th>
+						<td><input type="password" name="<?php echo esc_attr( self::OPTION_NAME . '[asana_token]' ); ?>" value="<?php echo esc_attr( $settings['asana_token'] ); ?>" class="regular-text" autocomplete="off" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Workspace GID', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[asana_workspace_gid]' ); ?>" value="<?php echo esc_attr( $settings['asana_workspace_gid'] ); ?>" class="regular-text" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Project GID', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[asana_project_gid]' ); ?>" value="<?php echo esc_attr( $settings['asana_project_gid'] ); ?>" class="regular-text" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Section GID', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[asana_section_gid]' ); ?>" value="<?php echo esc_attr( $settings['asana_section_gid'] ); ?>" class="regular-text" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Assignee GID', 'agoodbug' ); ?></th>
+						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[asana_assignee_gid]' ); ?>" value="<?php echo esc_attr( $settings['asana_assignee_gid'] ); ?>" class="regular-text" /></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Task Prefix', 'agoodbug' ); ?></th>
+						<td>
+							<input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[asana_task_prefix]' ); ?>" value="<?php echo esc_attr( $settings['asana_task_prefix'] ); ?>" class="regular-text" placeholder="SWE3" />
+							<p>
+								<button type="button" class="button agoodbug-test-btn" data-action="agoodbug_network_test_asana" data-nonce="<?php echo esc_attr( wp_create_nonce( 'agoodbug_network_test_asana' ) ); ?>">
 									<?php esc_html_e( 'Testa anslutning', 'agoodbug' ); ?>
 								</button>
 								<span class="agoodbug-test-result" style="margin-left:8px;"></span>

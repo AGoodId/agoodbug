@@ -7,7 +7,7 @@ Visual feedback and bug reporting widget for WordPress with screenshot capture.
 - Floating feedback button with three display styles
 - Screenshot capture with area selection and visual marking
 - Falls back gracefully to text-only feedback when screenshot fails
-- Multiple destinations: WordPress CPT, Email, Slack, Checkvist, AGoodMember
+- Multiple destinations: WordPress CPT, Email, Slack, Checkvist, AGoodMember, Asana
 - Role-based access control
 - Rate limiting
 - Multisite / network activation support
@@ -43,6 +43,7 @@ Reports can be sent to one or more destinations simultaneously:
 - **Slack** — posted via Incoming Webhook with screenshot preview
 - **Checkvist** — creates a task in a checklist
 - **AGoodMember** — sends to an AGoodMember project
+- **Asana** — creates a Ybug-like task with metadata and screenshot attachment
 
 ### Integration Setup
 
@@ -64,11 +65,17 @@ Enter one email address per line in **Email Recipients**. Leave empty to use eac
 1. Enter your API token and Project ID
 2. Enable AGoodMember and add it to Destinations
 
+#### Asana
+1. Create an Asana Personal Access Token
+2. Enter Workspace GID, Project GID, and optionally Section GID and Assignee GID
+3. Set Task Prefix, for example `SWE3`, to create titles like `[SWE3] #123 Feedback summary`
+4. Enable Asana and add it to Destinations
+
 ## Multisite
 
 AGoodBug supports WordPress multisite. Network-activate the plugin to enable it across all sites.
 
-**Network Admin → AGoodBug** lets you configure defaults for the entire network (destinations, email, Slack, Checkvist, AGoodMember, roles, rate limit etc.). Individual sites can override any setting via their own **Settings → AGoodBug** page.
+**Network Admin → AGoodBug** lets you configure defaults for the entire network (destinations, email, Slack, Checkvist, AGoodMember, Asana, roles, rate limit etc.). Individual sites can override any setting via their own **Settings → AGoodBug** page.
 
 When a new site is added to the network it automatically inherits the network defaults.
 

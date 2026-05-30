@@ -488,6 +488,17 @@ class REST_API {
 				}
 			}
 
+			// Send to Asana (wrapped in try-catch)
+			if ( in_array( 'asana', $destinations, true ) && ! empty( $settings['asana_enabled'] ) ) {
+				try {
+					$asana = new Integrations\Asana();
+					$results['asana'] = $asana->send( $data, $screenshot_url, $post_id );
+				} catch ( \Exception $e ) {
+					$results['asana'] = false;
+					error_log( 'AGoodBug - Asana error: ' . $e->getMessage() );
+				}
+			}
+
 			// Save destination results
 			update_post_meta( $post_id, '_destination_results', wp_json_encode( $results ) );
 			set_transient( $lock_key, [

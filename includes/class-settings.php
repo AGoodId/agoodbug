@@ -20,6 +20,7 @@ class Settings {
 	public function init() {
 		add_action( 'admin_init', [ $this, 'register_settings' ] );
 		add_action( 'wp_ajax_agoodbug_test_agoodmember', [ $this, 'ajax_test_agoodmember' ] );
+		add_action( 'wp_ajax_agoodbug_test_asana', [ $this, 'ajax_test_asana' ] );
 	}
 
 	/**
@@ -284,6 +285,93 @@ class Settings {
 				'description' => __( 'Klistra in projekt-URL eller UUID från AGoodMember (valfritt).', 'agoodbug' ),
 			]
 		);
+
+		// Asana section
+		add_settings_section(
+			'agoodbug_asana',
+			__( 'Asana Integration', 'agoodbug' ),
+			[ $this, 'render_asana_section' ],
+			'agoodbug'
+		);
+
+		add_settings_field(
+			'asana_enabled',
+			__( 'Enable', 'agoodbug' ),
+			[ $this, 'render_checkbox_field' ],
+			'agoodbug',
+			'agoodbug_asana',
+			[ 'name' => 'asana_enabled' ]
+		);
+
+		add_settings_field(
+			'asana_token',
+			__( 'Personal Access Token', 'agoodbug' ),
+			[ $this, 'render_password_field' ],
+			'agoodbug',
+			'agoodbug_asana',
+			[
+				'name'        => 'asana_token',
+				'description' => __( 'Create a Personal Access Token in Asana Developer Console.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'asana_workspace_gid',
+			__( 'Workspace GID', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_asana',
+			[ 'name' => 'asana_workspace_gid' ]
+		);
+
+		add_settings_field(
+			'asana_project_gid',
+			__( 'Project GID', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_asana',
+			[
+				'name'        => 'asana_project_gid',
+				'description' => __( 'The Asana project where feedback tasks should be created.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'asana_section_gid',
+			__( 'Section GID', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_asana',
+			[
+				'name'        => 'asana_section_gid',
+				'description' => __( 'Optional. Adds the task to a specific Asana section, such as Backlog.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'asana_assignee_gid',
+			__( 'Assignee GID', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_asana',
+			[
+				'name'        => 'asana_assignee_gid',
+				'description' => __( 'Optional. Leave empty to create unassigned tasks.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
+			'asana_task_prefix',
+			__( 'Task Prefix', 'agoodbug' ),
+			[ $this, 'render_text_field' ],
+			'agoodbug',
+			'agoodbug_asana',
+			[
+				'name'        => 'asana_task_prefix',
+				'placeholder' => get_bloginfo( 'name' ),
+				'description' => __( 'Used in titles, e.g. [SWE3] #123 Feedback summary.', 'agoodbug' ),
+			]
+		);
 	}
 
 	/**
@@ -310,6 +398,47 @@ class Settings {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 				body: 'action=agoodbug_test_agoodmember&_wpnonce=<?php echo esc_js( wp_create_nonce( 'agoodbug_test_agoodmember' ) ); ?>'
+			})
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				result.textContent = data.data;
+				result.style.color = data.success ? '#00a32a' : '#d63638';
+				btn.disabled = false;
+			})
+			.catch(function() {
+				result.textContent = '<?php echo esc_js( __( 'Nätverksfel', 'agoodbug' ) ); ?>';
+				result.style.color = '#d63638';
+				btn.disabled = false;
+			});
+		});
+		</script>
+		<?php
+	}
+
+	/**
+	 * Render Asana section
+	 */
+	public function render_asana_section() {
+		echo '<p>' . esc_html__( 'Send bug reports as Ybug-like tasks to Asana, including screenshot attachments.', 'agoodbug' ) . '</p>';
+		?>
+		<p>
+			<button type="button" class="button" id="agoodbug-test-asana">
+				<?php esc_html_e( 'Testa anslutning', 'agoodbug' ); ?>
+			</button>
+			<span id="agoodbug-test-asana-result" style="margin-left: 8px;"></span>
+		</p>
+		<script>
+		document.getElementById('agoodbug-test-asana').addEventListener('click', function() {
+			var btn = this;
+			var result = document.getElementById('agoodbug-test-asana-result');
+			btn.disabled = true;
+			result.textContent = '<?php echo esc_js( __( 'Testar…', 'agoodbug' ) ); ?>';
+			result.style.color = '#666';
+
+			fetch(ajaxurl, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: 'action=agoodbug_test_asana&_wpnonce=<?php echo esc_js( wp_create_nonce( 'agoodbug_test_asana' ) ); ?>'
 			})
 			.then(function(r) { return r.json(); })
 			.then(function(data) {
@@ -392,6 +521,63 @@ class Settings {
 	}
 
 	/**
+	 * AJAX handler to test Asana connection
+	 */
+	public function ajax_test_asana() {
+		check_ajax_referer( 'agoodbug_test_asana' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'Behörighet saknas.', 'agoodbug' ) );
+		}
+
+		$settings    = get_option( self::OPTION_NAME, $this->get_defaults() );
+		$token       = $settings['asana_token'] ?? '';
+		$project_gid = $settings['asana_project_gid'] ?? '';
+
+		if ( empty( $token ) ) {
+			wp_send_json_error( __( 'Asana token saknas.', 'agoodbug' ) );
+		}
+
+		$response = wp_remote_get( \AGoodBug\Integrations\Asana::API_URL . '/users/me', [
+			'headers' => [
+				'Authorization' => 'Bearer ' . $token,
+				'Accept'        => 'application/json',
+			],
+			'timeout' => 15,
+		] );
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( $response->get_error_message() );
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code === 401 || $code === 403 ) {
+			wp_send_json_error( __( 'Ogiltig Asana token.', 'agoodbug' ) );
+		}
+		if ( $code < 200 || $code >= 300 ) {
+			wp_send_json_error( sprintf( __( 'Asana svarade med HTTP %d.', 'agoodbug' ), $code ) );
+		}
+
+		$message = __( 'Anslutningen fungerar!', 'agoodbug' );
+
+		if ( ! empty( $project_gid ) ) {
+			$project_response = wp_remote_get( \AGoodBug\Integrations\Asana::API_URL . '/projects/' . rawurlencode( $project_gid ), [
+				'headers' => [
+					'Authorization' => 'Bearer ' . $token,
+					'Accept'        => 'application/json',
+				],
+				'timeout' => 15,
+			] );
+			$project_code = wp_remote_retrieve_response_code( $project_response );
+			$message = ( $project_code >= 200 && $project_code < 300 )
+				? __( 'Anslutningen fungerar! Projektet hittades.', 'agoodbug' )
+				: __( 'Token fungerar, men projektet kunde inte verifieras.', 'agoodbug' );
+		}
+
+		wp_send_json_success( $message );
+	}
+
+	/**
 	 * Get default settings
 	 *
 	 * @return array
@@ -415,6 +601,13 @@ class Settings {
 			'agoodmember_enabled'    => false,
 			'agoodmember_token'      => '',
 			'agoodmember_project_id' => '',
+			'asana_enabled'          => false,
+			'asana_token'            => '',
+			'asana_workspace_gid'    => '',
+			'asana_project_gid'      => '',
+			'asana_section_gid'      => '',
+			'asana_assignee_gid'     => '',
+			'asana_task_prefix'      => get_bloginfo( 'name' ),
 			'rate_limit'             => 10,
 		];
 	}
@@ -459,6 +652,15 @@ class Settings {
 		$sanitized['agoodmember_enabled']    = ! empty( $input['agoodmember_enabled'] );
 		$sanitized['agoodmember_token']      = sanitize_text_field( $input['agoodmember_token'] ?? '' );
 		$sanitized['agoodmember_project_id'] = $this->sanitize_project_id( $input['agoodmember_project_id'] ?? '' );
+
+		// Asana
+		$sanitized['asana_enabled']       = ! empty( $input['asana_enabled'] );
+		$sanitized['asana_token']         = sanitize_text_field( $input['asana_token'] ?? '' );
+		$sanitized['asana_workspace_gid'] = sanitize_text_field( $input['asana_workspace_gid'] ?? '' );
+		$sanitized['asana_project_gid']   = sanitize_text_field( $input['asana_project_gid'] ?? '' );
+		$sanitized['asana_section_gid']   = sanitize_text_field( $input['asana_section_gid'] ?? '' );
+		$sanitized['asana_assignee_gid']  = sanitize_text_field( $input['asana_assignee_gid'] ?? '' );
+		$sanitized['asana_task_prefix']   = sanitize_text_field( $input['asana_task_prefix'] ?? get_bloginfo( 'name' ) );
 
 		// Rate limit
 		$sanitized['rate_limit'] = absint( $input['rate_limit'] ?? $defaults['rate_limit'] );
@@ -606,6 +808,7 @@ class Settings {
 			'slack'       => __( 'Send Slack notification', 'agoodbug' ),
 			'checkvist'   => __( 'Create Checkvist task', 'agoodbug' ),
 			'agoodmember' => __( 'Create AGoodMember task', 'agoodbug' ),
+			'asana'       => __( 'Create Asana task', 'agoodbug' ),
 		];
 		?>
 		<fieldset>

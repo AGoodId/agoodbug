@@ -534,6 +534,18 @@ class Feedback_CPT {
 			}
 		}
 
+		// Send to Asana
+		if ( in_array( 'asana', $destinations, true ) && ! empty( $settings['asana_enabled'] ) ) {
+			try {
+				delete_post_meta( $post_id, '_asana_error' );
+				$asana = new Integrations\Asana();
+				$results['asana'] = $asana->send( $data, $screenshot_url, $post_id );
+			} catch ( \Exception $e ) {
+				$results['asana'] = false;
+				error_log( 'AGoodBug - Resend Asana error: ' . $e->getMessage() );
+			}
+		}
+
 		// Update destination results
 		update_post_meta( $post_id, '_destination_results', wp_json_encode( $results ) );
 
