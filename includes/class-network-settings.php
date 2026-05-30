@@ -499,7 +499,7 @@ class Network_Settings {
 					</tr>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'AGoodApp Token', 'agoodbug' ); ?></th>
-						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_token]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_token'] ); ?>" class="regular-text" /></td>
+						<td><input type="password" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_token]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_token'] ); ?>" class="regular-text" autocomplete="off" /></td>
 					</tr>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'AGoodApp Project ID', 'agoodbug' ); ?></th>
