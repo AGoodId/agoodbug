@@ -475,7 +475,7 @@ class Settings {
 		}
 
 		// Test the API key against an authenticated endpoint without creating data.
-		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks/__agoodbug_connection_test__', [
+		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks/00000000-0000-0000-0000-000000000000', [
 			'headers' => [
 				'X-API-Key' => $api_key,
 			],

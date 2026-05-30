@@ -178,7 +178,7 @@ class Network_Settings {
 			wp_send_json_error( __( 'API-nyckel saknas — spara inställningarna först.', 'agoodbug' ) );
 		}
 
-		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks/__agoodbug_connection_test__', [
+		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks/00000000-0000-0000-0000-000000000000', [
 			'headers' => [ 'X-API-Key' => $api_key ],
 			'timeout' => 15,
 		] );
