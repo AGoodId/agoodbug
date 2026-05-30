@@ -104,7 +104,19 @@ class Plugin {
 
 		if ( is_multisite() ) {
 			$network_settings = Network_Settings::get_settings();
-			return array_merge( $network_settings, $site_settings );
+			$site_defaults    = function_exists( __NAMESPACE__ . '\\get_default_settings' )
+				? get_default_settings()
+				: [];
+			$site_overrides   = [];
+
+			foreach ( $site_settings as $key => $value ) {
+				$default = $site_defaults[ $key ] ?? null;
+				if ( ! array_key_exists( $key, $site_defaults ) || $value !== $default ) {
+					$site_overrides[ $key ] = $value;
+				}
+			}
+
+			return array_merge( $network_settings, $site_overrides );
 		}
 
 		return $site_settings;

@@ -3,7 +3,7 @@
  * Plugin Name: AGoodBug
  * Plugin URI: https://github.com/AGoodId/agoodbug
  * Description: Visual feedback and bug reporting widget with screenshot capture.
- * Version: 1.8.36
+ * Version: 1.8.37
  * Author: AGoodId
  * Author URI: https://agoodid.se
  * License: GPL-2.0+
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'AGOODBUG_VERSION', '1.8.36' );
+define( 'AGOODBUG_VERSION', '1.8.37' );
 define( 'AGOODBUG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AGOODBUG_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -103,9 +103,12 @@ function get_default_settings() {
 		'show_in_admin'          => true,
 		'button_style'           => 'button',
 		'tab_label'              => 'Tyck till',
+		'allow_anonymous'        => false,
 		'roles'                  => [ 'administrator', 'editor' ],
 		'destinations'           => [ 'cpt', 'email' ],
 		'email_recipients'       => get_option( 'admin_email' ),
+		'slack_enabled'          => false,
+		'slack_webhook_url'      => '',
 		'checkvist_enabled'      => false,
 		'checkvist_username'     => '',
 		'checkvist_api_key'      => '',
