@@ -244,10 +244,10 @@ class Settings {
 			]
 		);
 
-		// AGoodMember section
+		// AGoodApp section
 		add_settings_section(
 			'agoodbug_agoodmember',
-			__( 'AGoodMember Integration', 'agoodbug' ),
+			__( 'AGoodApp Integration', 'agoodbug' ),
 			[ $this, 'render_agoodmember_section' ],
 			'agoodbug'
 		);
@@ -269,7 +269,7 @@ class Settings {
 			'agoodbug_agoodmember',
 			[
 				'name'        => 'agoodmember_token',
-				'description' => __( 'Generera en API-nyckel i AGoodMember → Inställningar → API-nycklar.', 'agoodbug' ),
+				'description' => __( 'Generera en API-nyckel i AGoodApp → Inställningar → API-nycklar.', 'agoodbug' ),
 			]
 		);
 
@@ -282,7 +282,7 @@ class Settings {
 			[
 				'name'        => 'agoodmember_project_id',
 				'placeholder' => 'https://www.agoodsport.se/projects/xxxxxxxx-xxxx-...',
-				'description' => __( 'Klistra in projekt-URL eller UUID från AGoodMember (valfritt).', 'agoodbug' ),
+				'description' => __( 'Klistra in projekt-URL eller UUID från AGoodApp (valfritt).', 'agoodbug' ),
 			]
 		);
 
@@ -375,10 +375,10 @@ class Settings {
 	}
 
 	/**
-	 * Render AGoodMember section
+	 * Render AGoodApp section
 	 */
 	public function render_agoodmember_section() {
-		echo '<p>' . esc_html__( 'Send bug reports as tasks to AGoodMember.', 'agoodbug' ) . '</p>';
+		echo '<p>' . esc_html__( 'Send bug reports as tasks to AGoodApp.', 'agoodbug' ) . '</p>';
 		?>
 		<p>
 			<button type="button" class="button" id="agoodbug-test-agoodmember">
@@ -457,7 +457,7 @@ class Settings {
 	}
 
 	/**
-	 * AJAX handler to test AGoodMember connection
+	 * AJAX handler to test AGoodApp connection
 	 */
 	public function ajax_test_agoodmember() {
 		check_ajax_referer( 'agoodbug_test_agoodmember' );
@@ -648,7 +648,7 @@ class Settings {
 		$sanitized['checkvist_api_key']  = sanitize_text_field( $input['checkvist_api_key'] ?? '' );
 		$sanitized['checkvist_list_id']  = sanitize_text_field( $input['checkvist_list_id'] ?? '' );
 
-		// AGoodMember
+		// AGoodApp
 		$sanitized['agoodmember_enabled']    = ! empty( $input['agoodmember_enabled'] );
 		$sanitized['agoodmember_token']      = sanitize_text_field( $input['agoodmember_token'] ?? '' );
 		$sanitized['agoodmember_project_id'] = $this->sanitize_project_id( $input['agoodmember_project_id'] ?? '' );
@@ -807,7 +807,7 @@ class Settings {
 			'email'       => __( 'Send email', 'agoodbug' ),
 			'slack'       => __( 'Send Slack notification', 'agoodbug' ),
 			'checkvist'   => __( 'Create Checkvist task', 'agoodbug' ),
-			'agoodmember' => __( 'Create AGoodMember task', 'agoodbug' ),
+			'agoodmember' => __( 'Create AGoodApp task', 'agoodbug' ),
 			'asana'       => __( 'Create Asana task', 'agoodbug' ),
 		];
 		?>

@@ -242,7 +242,7 @@ class Feedback_CPT {
 		if ( $agoodmember_error ) :
 		?>
 			<div class="agoodbug-meta-row">
-				<div class="agoodbug-meta-label" style="color: #d63638;"><?php esc_html_e( 'AGoodMember Error', 'agoodbug' ); ?></div>
+				<div class="agoodbug-meta-label" style="color: #d63638;"><?php esc_html_e( 'AGoodApp Error', 'agoodbug' ); ?></div>
 				<div class="agoodbug-meta-value" style="color: #d63638; font-size: 12px;">
 					<?php echo esc_html( $agoodmember_error ); ?>
 				</div>
@@ -521,7 +521,7 @@ class Feedback_CPT {
 			}
 		}
 
-		// Send to AGoodMember
+		// Send to AGoodApp
 		if ( in_array( 'agoodmember', $destinations, true ) && ! empty( $settings['agoodmember_enabled'] ) ) {
 			try {
 				// Clear previous error
@@ -530,7 +530,7 @@ class Feedback_CPT {
 				$results['agoodmember'] = $agoodmember->send( $data, $screenshot_url, $post_id );
 			} catch ( \Exception $e ) {
 				$results['agoodmember'] = false;
-				error_log( 'AGoodBug - Resend AGoodMember error: ' . $e->getMessage() );
+				error_log( 'AGoodBug - Resend AGoodApp error: ' . $e->getMessage() );
 			}
 		}
 

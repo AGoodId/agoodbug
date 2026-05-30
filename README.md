@@ -7,7 +7,7 @@ Visual feedback and bug reporting widget for WordPress with screenshot capture.
 - Floating feedback button with three display styles
 - Screenshot capture with area selection and visual marking
 - Falls back gracefully to text-only feedback when screenshot fails
-- Multiple destinations: WordPress CPT, Email, Slack, Checkvist, AGoodMember, Asana
+- Multiple destinations: WordPress CPT, Email, Slack, Checkvist, AGoodApp, Asana
 - Role-based access control
 - Rate limiting
 - Multisite / network activation support
@@ -42,7 +42,7 @@ Reports can be sent to one or more destinations simultaneously:
 - **Email** — sent to configured recipients (falls back to site admin email)
 - **Slack** — posted via Incoming Webhook with screenshot preview
 - **Checkvist** — creates a task in a checklist
-- **AGoodMember** — sends to an AGoodMember project
+- **AGoodApp** — sends to an AGoodApp project
 - **Asana** — creates a Ybug-like task with metadata and screenshot attachment
 
 ### Integration Setup
@@ -61,9 +61,9 @@ Enter one email address per line in **Email Recipients**. Leave empty to use eac
 2. Enter your username, API key and List ID
 3. Enable Checkvist and add it to Destinations
 
-#### AGoodMember
+#### AGoodApp
 1. Enter your API token and Project ID
-2. Enable AGoodMember and add it to Destinations
+2. Enable AGoodApp and add it to Destinations
 
 #### Asana
 1. Create an Asana Personal Access Token
@@ -75,7 +75,7 @@ Enter one email address per line in **Email Recipients**. Leave empty to use eac
 
 AGoodBug supports WordPress multisite. Network-activate the plugin to enable it across all sites.
 
-**Network Admin → AGoodBug** lets you configure defaults for the entire network (destinations, email, Slack, Checkvist, AGoodMember, Asana, roles, rate limit etc.). Individual sites can override any setting via their own **Settings → AGoodBug** page.
+**Network Admin → AGoodBug** lets you configure defaults for the entire network (destinations, email, Slack, Checkvist, AGoodApp, Asana, roles, rate limit etc.). Individual sites can override any setting via their own **Settings → AGoodBug** page.
 
 When a new site is added to the network it automatically inherits the network defaults.
 

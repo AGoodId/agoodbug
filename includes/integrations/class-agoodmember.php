@@ -1,6 +1,6 @@
 <?php
 /**
- * AGoodMember Integration
+ * AGoodApp Integration
  *
  * @package AGoodBug
  */
@@ -12,12 +12,12 @@ use AGoodBug\Plugin;
 class AGoodMember {
 
 	/**
-	 * AGoodMember API URL (hardcoded)
+	 * AGoodApp API URL (hardcoded)
 	 */
 	const API_URL = 'https://www.agoodsport.se';
 
 	/**
-	 * Send feedback to AGoodMember as a task
+	 * Send feedback to AGoodApp as a task
 	 *
 	 * @param array  $data           Feedback data.
 	 * @param string $screenshot_url Screenshot URL (WP attachment URL).
@@ -33,7 +33,7 @@ class AGoodMember {
 		$existing_task_number = $post_id ? get_post_meta( $post_id, '_agoodmember_task_number', true ) : '';
 
 		if ( ! empty( $existing_task_number ) ) {
-			error_log( 'AGoodBug - AGoodMember: Reusing existing task ' . $existing_task_number . ' for report #' . $post_id );
+			error_log( 'AGoodBug - AGoodApp: Reusing existing task ' . $existing_task_number . ' for report #' . $post_id );
 			return $existing_task_number;
 		}
 
@@ -42,7 +42,7 @@ class AGoodMember {
 			$legacy_task_number  = is_array( $destination_results ) ? ( $destination_results['agoodmember'] ?? '' ) : '';
 			if ( is_string( $legacy_task_number ) && $legacy_task_number !== '' ) {
 				update_post_meta( $post_id, '_agoodmember_task_number', sanitize_text_field( $legacy_task_number ) );
-				error_log( 'AGoodBug - AGoodMember: Reusing legacy task ' . $legacy_task_number . ' for report #' . $post_id );
+				error_log( 'AGoodBug - AGoodApp: Reusing legacy task ' . $legacy_task_number . ' for report #' . $post_id );
 				return $legacy_task_number;
 			}
 		}
@@ -65,7 +65,7 @@ class AGoodMember {
 
 		$has_screenshot_data = ! empty( $data['screenshot'] ) && strpos( $data['screenshot'], 'data:image/' ) === 0;
 
-		// Build notes HTML. When we have raw screenshot data, AGoodMember stores it
+		// Build notes HTML. When we have raw screenshot data, AGoodApp stores it
 		// and rewrites notes to a stable storage URL. Do not embed the local WP URL.
 		$notes_html = $this->build_notes_html( $data, $has_screenshot_data ? '' : $screenshot_url );
 
@@ -136,7 +136,7 @@ class AGoodMember {
 			}
 		}
 
-		error_log( 'AGoodBug - AGoodMember: Task created #' . $task_number . ' with notes' );
+		error_log( 'AGoodBug - AGoodApp: Task created #' . $task_number . ' with notes' );
 
 		return '#' . $task_number;
 	}
@@ -197,7 +197,7 @@ class AGoodMember {
 	 * @param string $message Error message.
 	 */
 	private function log_error( $post_id, $message ) {
-		error_log( 'AGoodBug - AGoodMember: ' . $message );
+		error_log( 'AGoodBug - AGoodApp: ' . $message );
 		if ( $post_id ) {
 			update_post_meta( $post_id, '_agoodmember_error', $message );
 		}

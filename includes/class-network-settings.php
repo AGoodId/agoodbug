@@ -108,7 +108,7 @@ class Network_Settings {
 			'checkvist_username'     => sanitize_text_field( $input['checkvist_username'] ?? '' ),
 			'checkvist_api_key'      => sanitize_text_field( $input['checkvist_api_key'] ?? '' ),
 			'checkvist_list_id'      => sanitize_text_field( $input['checkvist_list_id'] ?? '' ),
-			// AGoodMember
+			// AGoodApp
 			'agoodmember_enabled'    => ! empty( $input['agoodmember_enabled'] ),
 			'agoodmember_token'      => sanitize_text_field( $input['agoodmember_token'] ?? '' ),
 			'agoodmember_project_id' => sanitize_text_field( $input['agoodmember_project_id'] ?? '' ),
@@ -161,7 +161,7 @@ class Network_Settings {
 	}
 
 	/**
-	 * AJAX: test AGoodMember connection using saved network settings
+	 * AJAX: test AGoodApp connection using saved network settings
 	 */
 	public function ajax_test_agoodmember() {
 		check_ajax_referer( 'agoodbug_network_test_agoodmember' );
@@ -424,7 +424,7 @@ class Network_Settings {
 								'email'       => __( 'Email', 'agoodbug' ),
 								'slack'       => __( 'Slack', 'agoodbug' ),
 								'checkvist'   => __( 'Checkvist', 'agoodbug' ),
-								'agoodmember' => __( 'AGoodMember', 'agoodbug' ),
+								'agoodmember' => __( 'AGoodApp', 'agoodbug' ),
 								'asana'       => __( 'Asana', 'agoodbug' ),
 							];
 							foreach ( $destination_options as $value => $label ) :
@@ -495,23 +495,23 @@ class Network_Settings {
 					</tr>
 				</table>
 
-				<h2><?php esc_html_e( 'AGoodMember', 'agoodbug' ); ?></h2>
+				<h2><?php esc_html_e( 'AGoodApp', 'agoodbug' ); ?></h2>
 				<table class="form-table" role="presentation">
 					<tr>
-						<th scope="row"><?php esc_html_e( 'Enable AGoodMember', 'agoodbug' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'Enable AGoodApp', 'agoodbug' ); ?></th>
 						<td>
 							<label>
 								<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_enabled]' ); ?>" value="1" <?php checked( $settings['agoodmember_enabled'] ); ?> />
-								<?php esc_html_e( 'Send reports to AGoodMember.', 'agoodbug' ); ?>
+								<?php esc_html_e( 'Send reports to AGoodApp.', 'agoodbug' ); ?>
 							</label>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><?php esc_html_e( 'AGoodMember Token', 'agoodbug' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'AGoodApp Token', 'agoodbug' ); ?></th>
 						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_token]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_token'] ); ?>" class="regular-text" /></td>
 					</tr>
 					<tr>
-						<th scope="row"><?php esc_html_e( 'AGoodMember Project ID', 'agoodbug' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'AGoodApp Project ID', 'agoodbug' ); ?></th>
 						<td>
 							<input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[agoodmember_project_id]' ); ?>" value="<?php echo esc_attr( $settings['agoodmember_project_id'] ); ?>" class="regular-text" />
 							<p>

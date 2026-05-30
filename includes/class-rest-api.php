@@ -477,14 +477,14 @@ class REST_API {
 				}
 			}
 
-			// Send to AGoodMember (wrapped in try-catch)
+			// Send to AGoodApp (wrapped in try-catch)
 			if ( in_array( 'agoodmember', $destinations, true ) && ! empty( $settings['agoodmember_enabled'] ) ) {
 				try {
 					$agoodmember = new Integrations\AGoodMember();
 					$results['agoodmember'] = $agoodmember->send( $data, $screenshot_url, $post_id );
 				} catch ( \Exception $e ) {
 					$results['agoodmember'] = false;
-					error_log( 'AGoodBug - AGoodMember error: ' . $e->getMessage() );
+					error_log( 'AGoodBug - AGoodApp error: ' . $e->getMessage() );
 				}
 			}
 
