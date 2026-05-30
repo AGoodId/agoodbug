@@ -474,8 +474,8 @@ class Settings {
 			wp_send_json_error( __( 'API-nyckel saknas.', 'agoodbug' ) );
 		}
 
-		// Test the API key against an authenticated endpoint without creating data.
-		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks/00000000-0000-0000-0000-000000000000', [
+		// Test the API key by fetching tasks (limit 1)
+		$response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks?limit=1', [
 			'headers' => [
 				'X-API-Key' => $api_key,
 			],
@@ -492,14 +492,30 @@ class Settings {
 			wp_send_json_error( __( 'Ogiltig API-nyckel.', 'agoodbug' ) );
 		}
 
-		if ( $code !== 404 && ( $code < 200 || $code >= 300 ) ) {
+		if ( $code < 200 || $code >= 300 ) {
 			/* translators: %d: HTTP status code */
 			wp_send_json_error( sprintf( __( 'API svarade med HTTP %d.', 'agoodbug' ), $code ) );
 		}
 
-		$message = ! empty( $project_id )
-			? __( 'Anslutningen fungerar! API-nyckeln är giltig och projekt-ID skickas vid skapande.', 'agoodbug' )
-			: __( 'Anslutningen fungerar! API-nyckeln är giltig.', 'agoodbug' );
+		$message = __( 'Anslutningen fungerar!', 'agoodbug' );
+
+		// If project is configured, verify it exists
+		if ( ! empty( $project_id ) ) {
+			$project_response = wp_remote_get( \AGoodBug\Integrations\AGoodMember::API_URL . '/api/external/tasks?project_id=' . $project_id . '&limit=1', [
+				'headers' => [
+					'X-API-Key' => $api_key,
+				],
+				'timeout' => 15,
+			] );
+
+			$project_code = wp_remote_retrieve_response_code( $project_response );
+
+			if ( $project_code >= 200 && $project_code < 300 ) {
+				$message = __( 'Anslutningen fungerar! Projektet hittades.', 'agoodbug' );
+			} else {
+				$message = __( 'API-nyckeln fungerar, men projektet kunde inte verifieras.', 'agoodbug' );
+			}
+		}
 
 		wp_send_json_success( $message );
 	}
