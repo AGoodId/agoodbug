@@ -82,6 +82,7 @@ class Frontend {
 
 		// Localize script
 		wp_localize_script( 'agoodbug', 'agoodbugConfig', [
+			'enabled'        => true,
 			'apiUrl'         => rest_url( 'agoodbug/v1/feedback' ),
 			'proxyUrl'       => rest_url( 'agoodbug/v1/proxy' ),
 			'ajaxUrl'        => admin_url( 'admin-ajax.php' ),

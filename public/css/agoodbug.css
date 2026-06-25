@@ -90,16 +90,16 @@
 	font-weight: 600;
 	font-family: inherit;
 	letter-spacing: 0.05em;
-	writing-mode: vertical-lr;
-	transform: translateY(-50%) rotate(180deg);
+	writing-mode: vertical-rl;
+	transform: translateY(-50%);
 }
 
 .agoodbug-button--tab-side:hover {
-	transform: translateY(-50%) rotate(180deg) scale(1.05);
+	transform: translateY(-50%) scale(1.05);
 }
 
 .agoodbug-button--tab-side.is-hidden {
-	transform: translateY(-50%) rotate(180deg) translateX(100%);
+	transform: translateY(-50%) translateX(100%);
 	opacity: 0;
 }
 
@@ -596,6 +596,33 @@
 	.agoodbug-button svg {
 		width: 20px;
 		height: 20px;
+	}
+
+	.agoodbug-button--tab-bottom {
+		bottom: 0;
+		right: 16px;
+		width: auto;
+		height: auto;
+		padding: 10px 16px;
+	}
+
+	.agoodbug-button--tab-side {
+		bottom: auto;
+		right: 0;
+		top: 50%;
+		width: auto;
+		height: auto;
+		padding: 12px 9px;
+		border-radius: 6px 0 0 6px;
+		transform: translateY(-50%);
+	}
+
+	.agoodbug-button--tab-side:hover {
+		transform: translateY(-50%) scale(1.05);
+	}
+
+	.agoodbug-button--tab-side.is-hidden {
+		transform: translateY(-50%) translateX(100%);
 	}
 
 	.agoodbug-modal {

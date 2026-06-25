@@ -50,6 +50,12 @@ class REST_API {
 			],
 		] );
 
+		register_rest_route( self::NAMESPACE, '/embed.js', [
+			'methods'             => 'GET',
+			'callback'            => [ $this, 'get_embed_script' ],
+			'permission_callback' => '__return_true',
+		] );
+
 		register_rest_route( self::NAMESPACE, '/feedback', [
 			'methods'             => 'POST',
 			'callback'            => [ $this, 'submit_feedback' ],
@@ -205,6 +211,84 @@ class REST_API {
 			header( 'Cache-Control: public, max-age=86400' );
 			header( 'Access-Control-Allow-Origin: *' );
 			echo $base64; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return true;
+		}, 10, 1 );
+
+		return $wp_response;
+	}
+
+	/**
+	 * Return a small JavaScript config bridge for headless frontends.
+	 *
+	 * The endpoint is public so it can be loaded as a script tag, but it only
+	 * emits an enabled config when the current WP request is allowed to report.
+	 *
+	 * @return \WP_REST_Response
+	 */
+	public function get_embed_script() {
+		$settings = Plugin::get_settings();
+		$config   = [
+			'enabled' => false,
+		];
+
+		if ( ! empty( $settings['enabled'] ) && ( ! empty( $settings['allow_anonymous'] ) || Plugin::user_can_report() ) ) {
+			$user_email = '';
+			if ( is_user_logged_in() ) {
+				$user       = wp_get_current_user();
+				$user_email = $user->user_email;
+			}
+
+			$config = [
+				'enabled'        => true,
+				'credentials'    => 'include',
+				'apiUrl'         => rest_url( 'agoodbug/v1/feedback' ),
+				'proxyUrl'       => rest_url( 'agoodbug/v1/proxy' ),
+				'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
+				'ajaxAction'     => 'agoodbug_submit_feedback',
+				'ajaxNonce'      => wp_create_nonce( 'agoodbug_submit_feedback' ),
+				'nonce'          => wp_create_nonce( 'wp_rest' ),
+				'isLoggedIn'     => is_user_logged_in(),
+				'userEmail'      => $user_email,
+				'showEmailField' => ! is_user_logged_in() || ! empty( $settings['allow_anonymous'] ),
+				'buttonStyle'    => $settings['button_style'] ?? 'button',
+				'tabLabel'       => $settings['tab_label'] ?? __( 'Tyck till', 'agoodbug' ),
+				'strings'        => [
+					'buttonTitle'            => __( 'Rapportera', 'agoodbug' ),
+					'choiceTitle'            => __( 'Hur vill du rapportera?', 'agoodbug' ),
+					'generalFeedback'        => __( 'Generell feedback', 'agoodbug' ),
+					'generalFeedbackDesc'    => __( 'Skriv en kommentar utan skärmbild', 'agoodbug' ),
+					'screenshotFeedback'     => __( 'Ta en skärmbild', 'agoodbug' ),
+					'screenshotFeedbackDesc' => __( 'Markera ett område på sidan', 'agoodbug' ),
+					'overlayHint'            => __( 'Klicka och dra för att markera', 'agoodbug' ),
+					'modalTitle'             => __( 'Rapportera ett problem', 'agoodbug' ),
+					'emailLabel'             => __( 'Din e-post', 'agoodbug' ),
+					'emailPlaceholder'       => __( 'din@epost.se', 'agoodbug' ),
+					'commentLabel'           => __( 'Beskriv problemet', 'agoodbug' ),
+					'commentPlaceholder'     => __( 'Vad gick fel? Vad förväntade du dig?', 'agoodbug' ),
+					'submitButton'           => __( 'Skicka', 'agoodbug' ),
+					'cancelButton'           => __( 'Avbryt', 'agoodbug' ),
+					'sending'                => __( 'Skickar...', 'agoodbug' ),
+					'success'                => __( 'Tack! Din feedback har tagits emot.', 'agoodbug' ),
+					'error'                  => __( 'Något gick fel. Försök igen.', 'agoodbug' ),
+					'retryButton'            => __( 'Försök igen', 'agoodbug' ),
+					'closeButton'            => __( 'Stäng', 'agoodbug' ),
+					'screenshotFailed'       => __( 'Skärmbild kunde inte tas — beskriv problemet nedan.', 'agoodbug' ),
+				],
+			];
+		}
+
+		$script      = 'window.agoodbugConfig = ' . wp_json_encode( $config ) . ';window.dispatchEvent(new Event("agoodbug:config-ready"));';
+		$wp_response = new \WP_REST_Response();
+		$wp_response->set_status( 200 );
+		$wp_response->set_headers( [
+			'Content-Type'  => 'application/javascript; charset=UTF-8',
+			'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+		] );
+
+		add_filter( 'rest_pre_serve_request', function ( $served ) use ( $script ) {
+			header( 'Content-Type: application/javascript; charset=UTF-8' );
+			header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
+			echo $script; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			return true;
 		}, 10, 1 );
 

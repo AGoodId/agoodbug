@@ -6,11 +6,14 @@
 (function() {
 	'use strict';
 
-	const config = window.agoodbugConfig || {};
-	const strings = config.strings || {};
+	let config = window.agoodbugConfig || {};
+	let strings = config.strings || {};
+	let agoodbugInstance = null;
 
 	class AGoodBug {
 		constructor() {
+			if (config.enabled !== true) return;
+
 			this.container = document.getElementById('agoodbug-widget');
 			if (!this.container) return;
 
@@ -395,7 +398,7 @@
 
 				const proxyResponse = await fetch(
 					config.proxyUrl + '?url=' + encodeURIComponent(url) + '&responseType=text',
-					{ credentials: 'same-origin' }
+					{ credentials: this.getRequestCredentials(config.proxyUrl) }
 				);
 
 				if (!proxyResponse.ok) {
@@ -949,13 +952,26 @@
 			return [...new Set(urls)];
 		}
 
+		getRequestCredentials(url) {
+			if (config.credentials) {
+				return config.credentials;
+			}
+
+			try {
+				const requestUrl = new URL(url, window.location.href);
+				return requestUrl.origin === window.location.origin ? 'same-origin' : 'include';
+			} catch (e) {
+				return 'same-origin';
+			}
+		}
+
 		async postFeedback(data) {
 			let lastError = null;
 
 			for (const url of this.getFeedbackApiUrls()) {
 				const response = await fetch(url, {
 					method: 'POST',
-					credentials: 'same-origin',
+					credentials: this.getRequestCredentials(url),
 					headers: {
 						'Content-Type': 'application/json',
 						'X-WP-Nonce': config.nonce || ''
@@ -996,7 +1012,7 @@
 
 			const response = await fetch(url.toString(), {
 				method: 'POST',
-				credentials: 'same-origin',
+				credentials: this.getRequestCredentials(url.toString()),
 				headers: {
 					'Content-Type': 'application/json'
 				},
@@ -1161,11 +1177,25 @@
 		}
 	}
 
-	// Initialize when DOM is ready
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', () => new AGoodBug());
-	} else {
-		new AGoodBug();
+	function boot() {
+		config = window.agoodbugConfig || {};
+		strings = config.strings || {};
+
+		if (config.enabled !== true || agoodbugInstance) {
+			return;
+		}
+
+		agoodbugInstance = new AGoodBug();
 	}
+
+	// Initialize when both DOM and config are ready. Headless embeds may load
+	// the remote config script slower than the local widget script.
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', boot);
+	} else {
+		boot();
+	}
+
+	window.addEventListener('agoodbug:config-ready', boot);
 
 })();
