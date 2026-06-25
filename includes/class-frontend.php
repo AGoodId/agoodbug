@@ -13,6 +13,8 @@ class Frontend {
 	 * Initialize
 	 */
 	public function init() {
+		add_filter( 'script_loader_tag', [ $this, 'add_script_loader_attributes' ], 10, 3 );
+
 		// Frontend
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 		add_action( 'wp_footer', [ $this, 'render_widget' ] );
@@ -118,6 +120,12 @@ class Frontend {
 			],
 		] );
 
+		wp_add_inline_script(
+			'agoodbug',
+			'if (window.agoodbugConfig) { window.agoodbugConfig.enabled = [true, "true", "1", 1].indexOf(window.agoodbugConfig.enabled) !== -1; window.agoodbugConfig.showEmailField = [true, "true", "1", 1].indexOf(window.agoodbugConfig.showEmailField) !== -1; }',
+			'before'
+		);
+
 		// Styles
 		wp_enqueue_style(
 			'agoodbug',
@@ -136,5 +144,26 @@ class Frontend {
 		}
 
 		echo '<div id="agoodbug-widget"></div>';
+	}
+
+	/**
+	 * Keep widget scripts out of host-side JS optimization/delay pipelines.
+	 *
+	 * @param string $tag Script tag.
+	 * @param string $handle Script handle.
+	 * @param string $src Script source.
+	 *
+	 * @return string
+	 */
+	public function add_script_loader_attributes( $tag, $handle, $src ) {
+		if ( ! in_array( $handle, [ 'agoodbug', 'html2canvas' ], true ) ) {
+			return $tag;
+		}
+
+		if ( false !== strpos( $tag, 'data-no-optimize=' ) ) {
+			return $tag;
+		}
+
+		return str_replace( ' src=', ' data-no-optimize="1" data-no-defer="1" src=', $tag );
 	}
 }

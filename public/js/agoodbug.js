@@ -6,13 +6,46 @@
 (function() {
 	'use strict';
 
-	let config = window.agoodbugConfig || {};
+	function getConfig() {
+		if (window.agoodbugConfig) {
+			return window.agoodbugConfig;
+		}
+
+		const configScript = document.getElementById('agoodbug-js-extra');
+		const src = configScript ? configScript.getAttribute('src') || '' : '';
+
+		if (!src.startsWith('data:text/javascript')) {
+			return {};
+		}
+
+		try {
+			const payload = src.includes(';base64,')
+				? atob(src.split(';base64,')[1] || '')
+				: decodeURIComponent(src.split(',')[1] || '');
+			const match = payload.match(/(?:var\s+)?agoodbugConfig\s*=\s*(\{.*\})\s*;?/s);
+
+			if (match) {
+				window.agoodbugConfig = JSON.parse(match[1]);
+				return window.agoodbugConfig;
+			}
+		} catch (error) {
+			return {};
+		}
+
+		return {};
+	}
+
+	let config = getConfig();
 	let strings = config.strings || {};
 	let agoodbugInstance = null;
 
+	function isEnabled(value) {
+		return [ true, 'true', '1', 1 ].includes(value);
+	}
+
 	class AGoodBug {
 		constructor() {
-			if (config.enabled !== true) return;
+			if (!isEnabled(config.enabled)) return;
 
 			this.container = document.getElementById('agoodbug-widget');
 			if (!this.container) return;
@@ -474,10 +507,13 @@
 					clip-path: none !important;
 					-webkit-clip-path: none !important;
 				}
+				#agoodbug-widget,
 				.agoodbug-overlay,
+				.agoodbug-choice,
 				.agoodbug-modal,
 				.agoodbug-button,
 				.agoodbug-tab,
+				.agoodbug-permission,
 				[aria-hidden="true"],
 				[hidden] { display: none !important; }
 			`;
@@ -498,6 +534,34 @@
 			} catch (e) {}
 
 			return () => style.remove();
+		}
+
+		hideWidgetForCapture() {
+			const widget = this.container || document.getElementById('agoodbug-widget');
+			if (!widget) {
+				return () => {};
+			}
+
+			const previous = {
+				display: widget.style.getPropertyValue('display'),
+				displayPriority: widget.style.getPropertyPriority('display'),
+			};
+
+			widget.style.setProperty('display', 'none', 'important');
+
+			return () => {
+				if (previous.display) {
+					widget.style.setProperty('display', previous.display, previous.displayPriority);
+				} else {
+					widget.style.removeProperty('display');
+				}
+			};
+		}
+
+		waitForCaptureUiToSettle() {
+			return new Promise((resolve) => {
+				requestAnimationFrame(() => requestAnimationFrame(resolve));
+			});
 		}
 
 		// Patch color() CSS functions directly in the live document before html2canvas runs.
@@ -652,9 +716,10 @@
 		// We rely on transient activation from the selection mouseup so no extra
 		// "Continue" click is needed.
 		async captureViaScreenShare() {
-			// Hide our overlay so it isn't captured in the frame
+			// Hide all widget UI so it isn't captured in the browser frame.
+			let restoreWidget = this.hideWidgetForCapture();
 			this.overlay.classList.remove('is-active');
-			await new Promise(r => requestAnimationFrame(r));
+			await this.waitForCaptureUiToSettle();
 
 			let stream;
 			try {
@@ -671,6 +736,8 @@
 				});
 			} catch (e) {
 				console.warn('AGoodBug: getDisplayMedia denied/failed:', e);
+				restoreWidget();
+				restoreWidget = null;
 				this.cancelCapture();
 				this.screenshot = null;
 				this.screenshotFailed = true;
@@ -678,60 +745,76 @@
 				return;
 			}
 
-			// Pull one frame from the stream
-			const video = document.createElement('video');
-			video.muted = true;
-			video.srcObject = stream;
-			await new Promise(r => video.onloadedmetadata = r);
-			await video.play();
-			await new Promise(r => requestAnimationFrame(r));
+			try {
+				// Pull one frame from the stream
+				const video = document.createElement('video');
+				video.muted = true;
+				video.srcObject = stream;
+				await new Promise(r => video.onloadedmetadata = r);
+				await video.play();
+				await this.waitForCaptureUiToSettle();
 
-			const fullCanvas = document.createElement('canvas');
-			fullCanvas.width  = video.videoWidth;
-			fullCanvas.height = video.videoHeight;
-			fullCanvas.getContext('2d').drawImage(video, 0, 0);
+				const fullCanvas = document.createElement('canvas');
+				fullCanvas.width  = video.videoWidth;
+				fullCanvas.height = video.videoHeight;
+				fullCanvas.getContext('2d').drawImage(video, 0, 0);
 
-			// Stop the stream — frees the indicator and the user's permission
-			stream.getTracks().forEach(t => t.stop());
-			video.srcObject = null;
+				// Stop the stream — frees the indicator and the user's permission
+				stream.getTracks().forEach(t => t.stop());
+				video.srcObject = null;
 
-			// The captured frame matches the viewport (browser tab surface).
-			// Selection coords are clientX/Y → map directly with viewport scale.
-			const { startX, startY, endX, endY } = this.selection;
-			const scaleX = fullCanvas.width  / window.innerWidth;
-			const scaleY = fullCanvas.height / window.innerHeight;
+				// The captured frame matches the viewport (browser tab surface).
+				// Selection coords are clientX/Y → map directly with viewport scale.
+				const { startX, startY, endX, endY } = this.selection;
+				const scaleX = fullCanvas.width  / window.innerWidth;
+				const scaleY = fullCanvas.height / window.innerHeight;
 
-			const x = Math.min(startX, endX) * scaleX;
-			const y = Math.min(startY, endY) * scaleY;
-			const w = Math.abs(endX - startX) * scaleX;
-			const h = Math.abs(endY - startY) * scaleY;
+				const x = Math.min(startX, endX) * scaleX;
+				const y = Math.min(startY, endY) * scaleY;
+				const w = Math.abs(endX - startX) * scaleX;
+				const h = Math.abs(endY - startY) * scaleY;
 
-			const padding = 50 * scaleX;
-			const cropped = document.createElement('canvas');
-			cropped.width  = w + padding * 2;
-			cropped.height = h + padding * 2;
-			const ctx = cropped.getContext('2d');
-			ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-			ctx.fillRect(0, 0, cropped.width, cropped.height);
-			ctx.drawImage(
-				fullCanvas,
-				x - padding, y - padding, w + padding * 2, h + padding * 2,
-				0, 0, cropped.width, cropped.height
-			);
-			ctx.strokeStyle = '#ff6b35';
-			ctx.lineWidth   = 4 * scaleX;
-			ctx.strokeRect(padding, padding, w, h);
+				const padding = 50 * scaleX;
+				const cropped = document.createElement('canvas');
+				cropped.width  = w + padding * 2;
+				cropped.height = h + padding * 2;
+				const ctx = cropped.getContext('2d');
+				ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+				ctx.fillRect(0, 0, cropped.width, cropped.height);
+				ctx.drawImage(
+					fullCanvas,
+					x - padding, y - padding, w + padding * 2, h + padding * 2,
+					0, 0, cropped.width, cropped.height
+				);
+				ctx.strokeStyle = '#ff6b35';
+				ctx.lineWidth   = 4 * scaleX;
+				ctx.strokeRect(padding, padding, w, h);
 
-			this.screenshot = cropped.toDataURL('image/png');
-			const selectionData = {
-				x: Math.min(startX, endX),
-				y: Math.min(startY, endY),
-				width:  Math.abs(endX - startX),
-				height: Math.abs(endY - startY),
-			};
-			this.cancelCapture();
-			this.selection = selectionData;
-			this.openModal();
+				this.screenshot = cropped.toDataURL('image/png');
+				const selectionData = {
+					x: Math.min(startX, endX),
+					y: Math.min(startY, endY),
+					width:  Math.abs(endX - startX),
+					height: Math.abs(endY - startY),
+				};
+				restoreWidget();
+				restoreWidget = null;
+				this.cancelCapture();
+				this.selection = selectionData;
+				this.openModal();
+			} catch (e) {
+				console.warn('AGoodBug: screen frame capture failed:', e);
+				if (stream) {
+					stream.getTracks().forEach(t => t.stop());
+				}
+				if (restoreWidget) {
+					restoreWidget();
+				}
+				this.cancelCapture();
+				this.screenshot = null;
+				this.screenshotFailed = true;
+				this.openModal();
+			}
 		}
 
 		// Capture screenshot
@@ -1178,10 +1261,10 @@
 	}
 
 	function boot() {
-		config = window.agoodbugConfig || {};
+		config = getConfig();
 		strings = config.strings || {};
 
-		if (config.enabled !== true || agoodbugInstance) {
+		if (!isEnabled(config.enabled) || agoodbugInstance) {
 			return;
 		}
 
