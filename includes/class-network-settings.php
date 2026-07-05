@@ -85,6 +85,7 @@ class Network_Settings {
 		return [
 			'enabled'                => ! empty( $input['enabled'] ),
 			'show_in_admin'          => ! empty( $input['show_in_admin'] ),
+			'auto_update'            => ! empty( $input['auto_update'] ),
 			'button_style'           => in_array( $input['button_style'] ?? '', $allowed_styles, true )
 				? $input['button_style']
 				: 'button',
@@ -130,6 +131,7 @@ class Network_Settings {
 		$defaults = [
 			'enabled'                => true,
 			'show_in_admin'          => true,
+			'auto_update'            => true,
 			'button_style'           => 'button',
 			'tab_label'              => 'Tyck till',
 			'allow_anonymous'        => false,
@@ -349,6 +351,15 @@ class Network_Settings {
 							<label>
 								<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[show_in_admin]' ); ?>" value="1" <?php checked( $settings['show_in_admin'] ); ?> />
 								<?php esc_html_e( 'Also show the feedback button on admin pages.', 'agoodbug' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Automatic Updates', 'agoodbug' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="<?php echo esc_attr( self::OPTION_NAME . '[auto_update]' ); ?>" value="1" <?php checked( $settings['auto_update'] ); ?> />
+								<?php esc_html_e( 'Keep AGoodBug updated automatically when new releases are published.', 'agoodbug' ); ?>
 							</label>
 						</td>
 					</tr>

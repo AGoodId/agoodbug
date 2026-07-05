@@ -70,6 +70,18 @@ class Settings {
 		);
 
 		add_settings_field(
+			'auto_update',
+			__( 'Automatic Updates', 'agoodbug' ),
+			[ $this, 'render_checkbox_field' ],
+			'agoodbug',
+			'agoodbug_general',
+			[
+				'name'        => 'auto_update',
+				'description' => __( 'Keep AGoodBug updated automatically when new releases are published.', 'agoodbug' ),
+			]
+		);
+
+		add_settings_field(
 			'button_style',
 			__( 'Button Style', 'agoodbug' ),
 			[ $this, 'render_button_style_field' ],
@@ -586,6 +598,7 @@ class Settings {
 		return [
 			'enabled'            => true,
 			'show_in_admin'      => true,
+			'auto_update'        => true,
 			'button_style'       => 'button',
 			'tab_label'          => __( 'Tyck till', 'agoodbug' ),
 			'allow_anonymous'    => false,
@@ -624,6 +637,7 @@ class Settings {
 
 		$sanitized['enabled']          = ! empty( $input['enabled'] );
 		$sanitized['show_in_admin']    = ! empty( $input['show_in_admin'] );
+		$sanitized['auto_update']      = ! empty( $input['auto_update'] );
 		$allowed_styles                = [ 'button', 'tab-bottom', 'tab-side' ];
 		$sanitized['button_style']     = in_array( $input['button_style'] ?? '', $allowed_styles, true )
 			? $input['button_style']
@@ -688,7 +702,8 @@ class Settings {
 	 * @param array $args Field arguments.
 	 */
 	public function render_checkbox_field( $args ) {
-		$settings = get_option( self::OPTION_NAME, $this->get_defaults() );
+		$saved    = get_option( self::OPTION_NAME, [] );
+		$settings = array_merge( $this->get_defaults(), is_array( $saved ) ? $saved : [] );
 		$value    = ! empty( $settings[ $args['name'] ] );
 		?>
 		<label>

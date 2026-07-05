@@ -22,6 +22,8 @@ class Plugin {
 	public function init() {
 		$this->settings = self::get_settings();
 
+		add_filter( 'auto_update_plugin', [ $this, 'maybe_auto_update' ], 10, 2 );
+
 		// Initialize components
 		$this->init_cpt();
 		$this->init_rest_api();
@@ -92,6 +94,40 @@ class Plugin {
 			$frontend = new Frontend();
 			$frontend->init();
 		}
+	}
+
+	/**
+	 * Opt this plugin in to WordPress automatic updates when the setting is on.
+	 *
+	 * Runs on every load (including cron), regardless of whether the widget
+	 * itself is enabled. When the setting is off the incoming value is passed
+	 * through so the per-plugin toggle in wp-admin still works.
+	 *
+	 * @param bool|null $update Whether to auto-update.
+	 * @param object    $item   Update offer object.
+	 *
+	 * @return bool|null
+	 */
+	public function maybe_auto_update( $update, $item ) {
+		if ( ! is_object( $item ) ) {
+			return $update;
+		}
+
+		$plugin_file = $item->plugin ?? '';
+		$slug        = $item->slug ?? '';
+
+		if ( AGOODBUG_PLUGIN_BASENAME !== $plugin_file && 'agoodbug' !== $slug ) {
+			return $update;
+		}
+
+		$settings = self::get_settings();
+
+		// Missing key (settings saved by an older version) defaults to on.
+		if ( ! is_array( $settings ) || ! empty( $settings['auto_update'] ) || ! array_key_exists( 'auto_update', $settings ) ) {
+			return true;
+		}
+
+		return $update;
 	}
 
 	/**

@@ -28,6 +28,7 @@ Visual feedback and bug reporting widget for WordPress with screenshot capture.
 |---|---|
 | Enable Widget | Show/hide the feedback button |
 | Show in wp-admin | Also show on WordPress admin pages |
+| Automatic Updates | Auto-install new AGoodBug releases (on by default) |
 | Button Style | Sticky button, tab at bottom-right, or tab on right edge |
 | Tab Label | Text on the tab (default: "Tyck till") |
 | Allow Anonymous | Let non-logged-in visitors submit feedback |
