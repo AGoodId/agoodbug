@@ -541,9 +541,16 @@
 		// Defeat GSAP/ScrollTrigger initial-hidden states. Animation libraries set
 		// opacity:0 + visibility:hidden + clip-path on elements as initial states
 		// for scroll-driven reveals. Override all three. Genuinely hidden UI
-		// (cookie banners, modals, our own widget) uses display:none or
-		// aria-hidden/hidden — those stay hidden via the explicit excludes below.
+		// (cookie banners, modals, our own widget) must stay hidden. aria-hidden
+		// alone is not visual hiding: decorative content can still occupy space.
 		applyVisibilityOverride() {
+			let hiddenAttribute = 'data-agoodbug-hidden-' + Date.now().toString(36);
+			while (document.querySelector('[' + hiddenAttribute + ']')) hiddenAttribute += '-x';
+			const hidden = Array.from(document.querySelectorAll('[hidden], [aria-hidden="true"]')).filter(el => {
+				const css = getComputedStyle(el);
+				return css.display !== 'none' && (css.visibility !== 'visible' || Number(css.opacity) === 0);
+			});
+			hidden.forEach(el => el.setAttribute(hiddenAttribute, ''));
 			const style = document.createElement('style');
 			style.id = 'agoodbug-capture-overrides';
 			if (scriptNonce) style.nonce = scriptNonce;
@@ -561,8 +568,10 @@
 				.agoodbug-button,
 				.agoodbug-tab,
 				.agoodbug-permission,
-				[aria-hidden="true"],
-				[hidden] { display: none !important; }
+				[${hiddenAttribute}] {
+					opacity: 0 !important;
+					visibility: hidden !important;
+				}
 			`;
 			document.head.appendChild(style);
 
@@ -580,7 +589,10 @@
 				}
 			} catch (e) {}
 
-			return () => style.remove();
+			return () => {
+				style.remove();
+				hidden.forEach(el => el.removeAttribute(hiddenAttribute));
+			};
 		}
 
 		hideWidgetForCapture() {
@@ -964,7 +976,10 @@
 				// captures the full body. Use bodyRect to translate viewport coords
 				// to canvas coords (works for both native scroll and transform scroll).
 				const { startX, startY, endX, endY } = this.selection;
-				const bodyRect = document.body.getBoundingClientRect();
+				// Restoring capture styles can change document height and scroll
+				// anchoring (notably on long pages with a static feedback button).
+				// Translate selection coordinates against the layout we captured.
+				const bodyRect = bodyRectPre;
 				const scale    = canvas.width / bodyRect.width;
 				const x        = (Math.min(startX, endX) - bodyRect.left) * scale;
 				const y        = (Math.min(startY, endY) - bodyRect.top)  * scale;
