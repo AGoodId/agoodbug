@@ -21,7 +21,7 @@ const server = http.createServer((req, res) => {
   if(req.headers['sec-fetch-dest']==='empty') modernScriptFetches++;
   res.setHeader('Content-Type', 'text/css');
   res.end(`body{background-image:linear-gradient(120deg,color(display-p3 .1 .5 .6),oklch(.8 .12 80))}
-   #modern{transition:background-color .6s,color .6s,box-shadow .6s;color:color(display-p3 .1 .2 .3);background-color:color-mix(in srgb,#fff 90%,#007d8f);box-shadow:0 3px 12px color-mix(in srgb,#000 25%,transparent),inset 0 0 1px color(display-p3 .1 .2 .3);text-shadow:1px 1px oklch(.9 .02 30)}
+   #modern{-webkit-text-stroke-color:color(display-p3 .2 .1 .3);-webkit-text-stroke-width:.4px;transition:background-color .6s,color .6s,box-shadow .6s;color:color(display-p3 .1 .2 .3);background-color:color-mix(in srgb,#fff 90%,#007d8f);box-shadow:0 3px 12px color-mix(in srgb,#000 25%,transparent),inset 0 0 1px color(display-p3 .1 .2 .3);text-shadow:1px 1px oklch(.9 .02 30)}
    #modern::before{content:'';display:block;width:60px;height:30px;background-color:color-mix(in srgb,#007d8f 80%,white);box-shadow:0 2px 4px color(display-p3 .2 .2 .2 / .3)}
    #modern::after{content:'color(display-p3) stays text';display:block;color:oklch(.4 .1 200)}
    #capture-check{appearance:none;position:relative;width:24px;height:24px}#capture-check::before{content:'✓';position:absolute;inset:0;background-color:color-mix(in srgb,#007d8f 90%,white)}`);
@@ -100,19 +100,19 @@ server.on('connection', socket => { sockets.add(socket); socket.on('close', () =
 
   for(const mode of ['modern','modern-csp']) {
    p=await open(mode);const requestsBefore=modernScriptFetches;
-   const before=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
+   const before=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,textStroke:getComputedStyle(e).webkitTextStrokeColor,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
    assert.match(before.shadow,/color\(/);assert.match(before.pseudo,/color\(/);
    const patched=await p.evaluate(async()=>{
     const restore=await testWidget.instance().applyColorPatch();
     const e=document.querySelector('#modern'),s=getComputedStyle(e),b=getComputedStyle(e,'::before'),a=getComputedStyle(e,'::after');
-    const values=[s.outlineColor,s.boxShadow,s.textShadow,b.backgroundColor,b.boxShadow,a.color,getComputedStyle(document.body).backgroundImage];
+    const values=[s.outlineColor,s.boxShadow,s.textShadow,s.webkitTextStrokeColor,b.backgroundColor,b.boxShadow,a.color,getComputedStyle(document.body).backgroundImage];
     const literal=a.content,nonce=[...document.querySelectorAll('style')].at(-1).nonce;
     restore.forEach(fn=>fn());return {values,literal,nonce};
    });
    assert.ok(patched.values.every(v=>!/(?:color|oklch|oklab|lab|lch|color-mix)\(/.test(v)),JSON.stringify(patched));
    assert.equal(patched.literal,'"color(display-p3) stays text"');assert.equal(patched.nonce,'fixture-nonce');
    await takeScreenshot(p);await preview(p);
-   const after=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
+   const after=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,textStroke:getComputedStyle(e).webkitTextStrokeColor,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
    assert.deepEqual(after,before);assert.equal(await p.locator('#capture-check').isChecked(),true);assert.equal(modernScriptFetches,requestsBefore,'Colour normalization does not fetch stylesheets; the renderer may clone stylesheet links');
    assert.equal(await p.evaluate(()=>[...document.querySelectorAll('*')].some(e=>[...e.attributes].some(a=>a.name.startsWith('data-agoodbug-colour-')||a.name.startsWith('data-agoodbug-hidden-')))),false);
    cases++;await p.close();

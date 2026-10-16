@@ -680,7 +680,7 @@
 			const props = [
 				'color', 'background-color', 'background-image',
 				'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
-				'outline-color', 'text-decoration-color', 'box-shadow', 'text-shadow',
+				'outline-color', 'text-decoration-color', '-webkit-text-stroke-color', 'box-shadow', 'text-shadow',
 				'fill', 'stroke', 'filter',
 			];
 			const overrides = (computed) => props.flatMap(prop => {
