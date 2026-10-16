@@ -541,11 +541,19 @@
 		// Defeat GSAP/ScrollTrigger initial-hidden states. Animation libraries set
 		// opacity:0 + visibility:hidden + clip-path on elements as initial states
 		// for scroll-driven reveals. Override all three. Genuinely hidden UI
-		// (cookie banners, modals, our own widget) uses display:none or
-		// aria-hidden/hidden — those stay hidden via the explicit excludes below.
+		// (cookie banners, modals, our own widget) must stay hidden. aria-hidden
+		// alone is not visual hiding: decorative content can still occupy space.
 		applyVisibilityOverride() {
+			let hiddenAttribute = 'data-agoodbug-hidden-' + Date.now().toString(36);
+			while (document.querySelector('[' + hiddenAttribute + ']')) hiddenAttribute += '-x';
+			const hidden = Array.from(document.querySelectorAll('[hidden], [aria-hidden="true"]')).filter(el => {
+				const css = getComputedStyle(el);
+				return css.display !== 'none' && (css.visibility !== 'visible' || Number(css.opacity) === 0);
+			});
+			hidden.forEach(el => el.setAttribute(hiddenAttribute, ''));
 			const style = document.createElement('style');
 			style.id = 'agoodbug-capture-overrides';
+			if (scriptNonce) style.nonce = scriptNonce;
 			style.textContent = `
 				*, *::before, *::after {
 					opacity: 1 !important;
@@ -560,8 +568,10 @@
 				.agoodbug-button,
 				.agoodbug-tab,
 				.agoodbug-permission,
-				[aria-hidden="true"],
-				[hidden] { display: none !important; }
+				[${hiddenAttribute}] {
+					opacity: 0 !important;
+					visibility: hidden !important;
+				}
 			`;
 			document.head.appendChild(style);
 
@@ -579,7 +589,10 @@
 				}
 			} catch (e) {}
 
-			return () => style.remove();
+			return () => {
+				style.remove();
+				hidden.forEach(el => el.removeAttribute(hiddenAttribute));
+			};
 		}
 
 		hideWidgetForCapture() {
@@ -610,86 +623,123 @@
 			});
 		}
 
-		// Patch color() CSS functions directly in the live document before html2canvas runs.
-		// html2canvas throws on color(display-p3 …) / color(srgb …) etc. because its own
-		// CSS parser doesn't support them. We convert each one to rgb() via a 1×1 canvas
-		// (the browser converts any color space to sRGB when drawing to canvas).
-		// Returns an array of restore functions; call each after html2canvas finishes.
+		// html2canvas does not parse modern CSS colour functions. Normalize the
+		// browser's resolved values (including shadows, gradients and pseudo
+		// elements), then restore only the temporary declarations we changed.
+		// Stylesheets stay intact: no refetch, disable or text replacement.
 		async applyColorPatch() {
 			const tiny = document.createElement('canvas');
 			tiny.width = tiny.height = 1;
 			const ctx = tiny.getContext('2d');
-
-			const toRgb = (colorStr) => {
-				try {
-					ctx.clearRect(0, 0, 1, 1);
-					ctx.fillStyle = colorStr;
-					ctx.fillRect(0, 0, 1, 1);
-					const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-					if (a === 0) return 'transparent';
-					return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
-				} catch (e) {
-					return 'transparent';
-				}
+			if (!ctx) throw new Error('Canvas colour conversion is unavailable');
+			const modern = new Set(['color', 'color-mix', 'lab', 'lch', 'oklab', 'oklch']);
+			const toRgb = (value) => {
+				if (!CSS.supports('color', value)) return value;
+				ctx.clearRect(0, 0, 1, 1);
+				ctx.fillStyle = value;
+				ctx.fillRect(0, 0, 1, 1);
+				const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+				return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a / 255})`;
 			};
-
-			const patch = (text) => text.replace(/(?<![a-zA-Z0-9_-])color\(([^)]*)\)/g, (m) => toRgb(m));
-			const restoreFns = [];
-
-			// Patch inline <style> elements
-			document.querySelectorAll('style').forEach(el => {
-				const orig = el.textContent;
-				const patched = patch(orig);
-				if (patched !== orig) {
-					el.textContent = patched;
-					restoreFns.push(() => { el.textContent = orig; });
+			// Walk balanced functions rather than splitting on the first ')'. A
+			// gradient/shadow may contain several colours and nested colour-mix.
+			// Quoted strings and url() payloads must remain literal.
+			const patch = (text) => {
+				let result = '', index = 0;
+				while (index < text.length) {
+					const quote = text[index];
+					if (quote === '\"' || quote === "'") {
+						const start = index++;
+						while (index < text.length) {
+							if (text[index] === '\\') { index += 2; continue; }
+							if (text[index++] === quote) break;
+						}
+						result += text.slice(start, index); continue;
+					}
+					const match = /^[a-zA-Z_-][a-zA-Z0-9_-]*\(/.exec(text.slice(index));
+					if (!match) { result += text[index++]; continue; }
+					const start = index, name = match[0].slice(0, -1).toLowerCase();
+					index += match[0].length;
+					const inner = index;
+					let depth = 1, quoted = '';
+					while (index < text.length && depth) {
+						const ch = text[index++];
+						if (ch === '\\') { index++; continue; }
+						if (quoted) { if (ch === quoted) quoted = ''; continue; }
+						if (ch === '\"' || ch === "'") { quoted = ch; continue; }
+						if (ch === '(') depth++;
+						if (ch === ')') depth--;
+					}
+					if (depth) { result += text.slice(start); break; }
+					const value = text.slice(start, index);
+					result += modern.has(name) ? toRgb(value) : name === 'url' ? value
+						: text.slice(start, inner) + patch(text.slice(inner, index - 1)) + ')';
 				}
-			});
-
-			// Fetch external stylesheets, patch, inject as <style>, disable original <link>
-			const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-			await Promise.all(links.map(async (link) => {
-				const href = link.href;
-				if (!href) return;
-				try {
-					const res = await fetch(href);
-					if (!res.ok) return;
-					const text = await res.text();
-					const patched = patch(text);
-					if (patched === text) return;
-					const style = document.createElement('style');
-					style.textContent = patched;
-					link.insertAdjacentElement('afterend', style);
-					link.disabled = true;
-					restoreFns.push(() => { style.remove(); link.disabled = false; });
-				} catch (e) {}
-			}));
-
-			// Belt-and-suspenders: html2canvas also reads window.getComputedStyle() per
-			// element. In Chrome 111+ this returns color(display-p3 …) natively. Apply
-			// !important inline styles with rgb() equivalents for any element that still
-			// has color() in its computed values after the stylesheet patches above.
-			const colorProps = [
-				'color', 'background-color',
+				return result;
+			};
+			const props = [
+				'color', 'background-color', 'background-image',
 				'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
-				'outline-color', 'text-decoration-color',
+				'outline-color', 'text-decoration-color', '-webkit-text-stroke-color', 'box-shadow', 'text-shadow',
+				'fill', 'stroke', 'filter',
 			];
-			document.querySelectorAll('*').forEach(el => {
-				const computed = window.getComputedStyle(el);
-				const overrides = {};
-				colorProps.forEach(prop => {
-					const val = computed.getPropertyValue(prop);
-					if (val && val.includes('color(')) overrides[prop] = toRgb(val);
-				});
-				if (!Object.keys(overrides).length) return;
-				const prev = {};
-				colorProps.forEach(prop => { prev[prop] = el.style.getPropertyValue(prop); });
-				Object.entries(overrides).forEach(([p, v]) => el.style.setProperty(p, v, 'important'));
-				restoreFns.push(() => {
-					Object.entries(prev).forEach(([p, v]) => v ? el.style.setProperty(p, v) : el.style.removeProperty(p));
-				});
+			const overrides = (computed) => props.flatMap(prop => {
+				const value = computed.getPropertyValue(prop);
+				const normalized = patch(value);
+				return normalized !== value ? [[prop, normalized]] : [];
 			});
-
+			const restoreFns = [], pseudoRules = [];
+			// Interpolating from a modern colour to its RGB equivalent can itself
+			// expose oklab() while a CSS transition is running. Normalize a stable
+			// frame, and keep transitions paused until the declarations are restored.
+			const freeze = document.createElement('style');
+			if (scriptNonce) freeze.nonce = scriptNonce;
+			freeze.textContent = '*,*::before,*::after{transition:none!important;animation-play-state:paused!important}';
+			let attribute = 'data-agoodbug-colour-' + Date.now().toString(36);
+			while (document.querySelector('[' + attribute + ']')) attribute += '-x';
+			let serial = 0;
+			try {
+				document.head.appendChild(freeze);
+				document.querySelectorAll('*').forEach(el => {
+					const changes = overrides(getComputedStyle(el));
+					if (changes.length) {
+						const hadStyle = el.hasAttribute('style');
+						const previous = changes.map(([prop]) => [prop, el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop)]);
+						restoreFns.push(() => {
+							previous.forEach(([prop, value, priority]) => value ? el.style.setProperty(prop, value, priority) : el.style.removeProperty(prop));
+							if (!hadStyle && !el.style.length) el.removeAttribute('style');
+						});
+						changes.forEach(([prop, value]) => el.style.setProperty(prop, value, 'important'));
+					}
+					for (const pseudo of ['::before', '::after']) {
+						const computed = getComputedStyle(el, pseudo);
+						if (!computed.content || ['none', 'normal'].includes(computed.content)) continue;
+						const changes = overrides(computed);
+						if (!changes.length) continue;
+						if (!el.hasAttribute(attribute)) {
+							el.setAttribute(attribute, String(++serial));
+							restoreFns.push(() => el.removeAttribute(attribute));
+						}
+						pseudoRules.push('[' + attribute + '="' + el.getAttribute(attribute) + '"]' + pseudo + '{' + changes.map(([prop, value]) => prop + ':' + value + '!important').join(';') + '}');
+					}
+				});
+				if (pseudoRules.length) {
+					const style = document.createElement('style');
+					if (scriptNonce) style.nonce = scriptNonce;
+					style.textContent = pseudoRules.join('\n');
+					restoreFns.push(() => style.remove());
+					document.head.appendChild(style);
+				}
+			} catch (error) {
+				restoreFns.forEach(restore => restore());
+				freeze.remove();
+				throw error;
+			}
+			restoreFns.push(() => {
+				// Flush the restored layout before transitions resume.
+				document.body.getBoundingClientRect();
+				freeze.remove();
+			});
 			return restoreFns;
 		}
 
@@ -897,12 +947,11 @@
 				// Replace cross-origin images with proxied data URLs
 				restored = await this.proxyCrossOriginImages();
 
-				// Patch color() functions in live document before html2canvas reads CSS
-				cssRestoreFns = await this.applyColorPatch();
-
 				// Force visibility — kills GSAP/ScrollTrigger-driven hidden states
 				// that html2canvas's clone iframe would otherwise capture as blank.
 				cssRestoreFns.push( this.applyVisibilityOverride() );
+				// Resolve colours after reveal/GSAP changes, with CSS transitions paused.
+				cssRestoreFns.push( ...await this.applyColorPatch() );
 
 				// Compute a safe scale: long pages produce huge canvases that hit
 				// browser limits (Safari ~16 megapixels, others vary) and only render
@@ -919,11 +968,19 @@
 					allowTaint: false,
 					scale: captureScale,
 					logging: false,
+					onclone: (doc) => {
+						// html2canvas synthesizes pseudo children for styled controls.
+						// INPUT is void: these children cannot paint and have empty
+						// computed colours. Its native checked state is rendered separately.
+						doc.querySelectorAll('input > html2canvaspseudoelement').forEach(el => el.remove());
+					},
 				});
 
 				// Restore CSS patches and image sources
 				cssRestoreFns.forEach(fn => fn());
+				cssRestoreFns = [];
 				this.restoreImages(restored);
+				restored = [];
 
 				// Detect blank canvas — html2canvas silently fails on unsupported CSS
 				// (e.g. oklch(), color-mix()). Sample pixels; if >90% are uniform, bail out.
@@ -939,7 +996,10 @@
 				// captures the full body. Use bodyRect to translate viewport coords
 				// to canvas coords (works for both native scroll and transform scroll).
 				const { startX, startY, endX, endY } = this.selection;
-				const bodyRect = document.body.getBoundingClientRect();
+				// Restoring capture styles can change document height and scroll
+				// anchoring (notably on long pages with a static feedback button).
+				// Translate selection coordinates against the layout we captured.
+				const bodyRect = bodyRectPre;
 				const scale    = canvas.width / bodyRect.width;
 				const x        = (Math.min(startX, endX) - bodyRect.left) * scale;
 				const y        = (Math.min(startY, endY) - bodyRect.top)  * scale;

@@ -11,11 +11,22 @@ const vendor = fs.readFileSync(path.join(root, 'vendor/html2canvas.min.js'));
 const fixtureSource = source.replace('\tfunction boot() {', '\twindow.testWidget = {loadHtml2Canvas, instance: () => agoodbugInstance};\n\tfunction boot() {');
 assert.notEqual(fixtureSource, source);
 const counts = new Map();
+let modernScriptFetches = 0;
 const sockets = new Set();
 const server = http.createServer((req, res) => {
  const url = new URL(req.url, 'http://localhost');
  if (url.pathname === '/widget.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(fixtureSource); return; }
  if (url.pathname === '/widget.css') { res.setHeader('Content-Type', 'text/css'); res.end(fs.readFileSync(path.join(root, 'public/css/agoodbug.css'))); return; }
+ if (url.pathname === '/modern.css') {
+  if(req.headers['sec-fetch-dest']==='empty') modernScriptFetches++;
+  res.setHeader('Content-Type', 'text/css');
+  res.end(`body{background-image:linear-gradient(120deg,color(display-p3 .1 .5 .6),oklch(.8 .12 80))}
+   #modern{-webkit-text-stroke-color:color(display-p3 .2 .1 .3);-webkit-text-stroke-width:.4px;transition:background-color .6s,color .6s,box-shadow .6s;color:color(display-p3 .1 .2 .3);background-color:color-mix(in srgb,#fff 90%,#007d8f);box-shadow:0 3px 12px color-mix(in srgb,#000 25%,transparent),inset 0 0 1px color(display-p3 .1 .2 .3);text-shadow:1px 1px oklch(.9 .02 30)}
+   #modern::before{content:'';display:block;width:60px;height:30px;background-color:color-mix(in srgb,#007d8f 80%,white);box-shadow:0 2px 4px color(display-p3 .2 .2 .2 / .3)}
+   #modern::after{content:'color(display-p3) stays text';display:block;color:oklch(.4 .1 200)}
+   #capture-check{appearance:none;position:relative;width:24px;height:24px}#capture-check::before{content:'✓';position:absolute;inset:0;background-color:color-mix(in srgb,#007d8f 90%,white)}`);
+  return;
+ }
  if (url.pathname === '/vendor.js') {
   const mode = url.searchParams.get('mode'); const n = (counts.get(mode) || 0) + 1; counts.set(mode, n);
   if (mode === 'fail' && n === 1) { res.writeHead(503); res.end(); return; }
@@ -26,9 +37,10 @@ const server = http.createServer((req, res) => {
  }
  if (url.pathname === '/') {
   const mode = url.searchParams.get('mode') || 'normal';
-  if(mode==='csp') res.setHeader('Content-Security-Policy', "script-src 'nonce-fixture-nonce'; object-src 'none'");
+  if(mode==='csp'||mode==='modern-csp') res.setHeader('Content-Security-Policy', "script-src 'nonce-fixture-nonce'; style-src 'self' 'nonce-fixture-nonce'; object-src 'none'");
   res.setHeader('Content-Type', 'text/html');
-  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style>body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style></head><body><main><h1>Screenshot regression fixture</h1><section>Public test content. No customer data or report submission.</section></main><div id="agoodbug-widget"></div><script nonce="fixture-nonce">window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script id="agoodbug-js" nonce="fixture-nonce" src="/widget.js"></script></body></html>`); return;
+  const longStyle=mode==='modern-long'?'<style nonce="fixture-nonce">.long-spacer{height:2400px}#agoodbug-widget .agoodbug-button{position:static;display:block;transform:none;margin:20px auto;width:120px}#modern{background-image:linear-gradient(90deg,#123456 50%,#fedcba 50%)}</style>':'';
+  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style nonce="fixture-nonce">body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style>${mode.startsWith('modern')?'<link rel="stylesheet" href="/modern.css">':''}${longStyle}</head><body>${mode==='modern-long'?'<div class="long-spacer" aria-hidden="true"></div><div aria-hidden="true" style="position:fixed;inset:0;background:red;opacity:0;pointer-events:none">Hidden UI</div>':''}<main><h1>Screenshot regression fixture</h1><section id="modern" style="outline-color:oklch(.5 .1 200)!important;--keep:yes">Public test content. No customer data or report submission.</section>${mode.startsWith('modern')?'<input id="capture-check" type="checkbox" checked aria-label="Test checkbox">':''}</main><div id="agoodbug-widget"></div><script nonce="fixture-nonce">window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script id="agoodbug-js" nonce="fixture-nonce" src="/widget.js"></script></body></html>`); return;
  }
  res.writeHead(404); res.end();
 });
@@ -86,6 +98,42 @@ server.on('connection', socket => { sockets.add(socket); socket.on('close', () =
   assert.equal(await p.locator('script[src*="/vendor.js"]').evaluate(e=>e.nonce),'fixture-nonce');
   assert.equal(counts.get('csp'),1);cases++;await p.close();
 
+  for(const mode of ['modern','modern-csp']) {
+   p=await open(mode);const requestsBefore=modernScriptFetches;
+   const before=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,textStroke:getComputedStyle(e).webkitTextStrokeColor,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
+   assert.match(before.shadow,/color\(/);assert.match(before.pseudo,/color\(/);
+   const patched=await p.evaluate(async()=>{
+    const restore=await testWidget.instance().applyColorPatch();
+    const e=document.querySelector('#modern'),s=getComputedStyle(e),b=getComputedStyle(e,'::before'),a=getComputedStyle(e,'::after');
+    const values=[s.outlineColor,s.boxShadow,s.textShadow,s.webkitTextStrokeColor,b.backgroundColor,b.boxShadow,a.color,getComputedStyle(document.body).backgroundImage];
+    const literal=a.content,nonce=[...document.querySelectorAll('style')].at(-1).nonce;
+    restore.forEach(fn=>fn());return {values,literal,nonce};
+   });
+   assert.ok(patched.values.every(v=>!/(?:color|oklch|oklab|lab|lch|color-mix)\(/.test(v)),JSON.stringify(patched));
+   assert.equal(patched.literal,'"color(display-p3) stays text"');assert.equal(patched.nonce,'fixture-nonce');
+   await takeScreenshot(p);await preview(p);
+   const after=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,textStroke:getComputedStyle(e).webkitTextStrokeColor,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
+   assert.deepEqual(after,before);assert.equal(await p.locator('#capture-check').isChecked(),true);assert.equal(modernScriptFetches,requestsBefore,'Colour normalization does not fetch stylesheets; the renderer may clone stylesheet links');
+   assert.equal(await p.evaluate(()=>[...document.querySelectorAll('*')].some(e=>[...e.attributes].some(a=>a.name.startsWith('data-agoodbug-colour-')||a.name.startsWith('data-agoodbug-hidden-')))),false);
+   cases++;await p.close();
+  }
+
+  p=await open('modern-failure');
+  const failureBefore=await p.locator('#modern').evaluate(e=>e.style.cssText);
+  await p.evaluate(async()=>{await testWidget.loadHtml2Canvas();window.html2canvas=async()=>{throw new Error('Deliberate renderer failure after colour normalization');};});
+  await takeScreenshot(p);
+  await p.waitForFunction(()=>document.querySelector('.agoodbug-modal.is-open')&&!document.querySelector('.agoodbug-modal__screenshot-notice').hidden);
+  assert.equal(await p.locator('#modern').evaluate(e=>e.style.cssText),failureBefore);
+  assert.equal(await p.evaluate(()=>[...document.querySelectorAll('*')].some(e=>[...e.attributes].some(a=>a.name.startsWith('data-agoodbug-colour-')||a.name.startsWith('data-agoodbug-hidden-')))),false);
+  cases++;await p.close();
+
+  p=await open('modern-long');const longGeometry=[];p.on('console',async m=>{if(m.text().startsWith('[AGoodBug debug]'))longGeometry.push(await m.args()[1].jsonValue());});
+  await p.locator('.agoodbug-button').click();await p.locator('[data-mode="screenshot"]').click();
+  const marker=await p.locator('#modern').boundingBox();
+  await p.mouse.move(marker.x+20,marker.y+15);await p.mouse.down();await p.mouse.move(marker.x+marker.width-20,marker.y+marker.height-15);await p.mouse.up();await preview(p);
+  const markerPixels=await p.locator('.agoodbug-modal__preview img').evaluate(img=>{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);const d=ctx.getImageData(0,0,c.width,c.height).data;let blue=0,cream=0;for(let i=0;i<d.length;i+=4){if(d[i]===18&&d[i+1]===52&&d[i+2]===86&&d[i+3]===255)blue++;if(d[i]===254&&d[i+1]===220&&d[i+2]===186&&d[i+3]===255)cream++;}return{blue,cream};});
+  assert.ok(markerPixels.blue>100&&markerPixels.cream>100,JSON.stringify({markerPixels,marker,longGeometry}));cases++;await p.close();
+
   p = await open('timeout'); await p.clock.install();
   await p.evaluate(()=>{window.timeoutResult=null;testWidget.loadHtml2Canvas().then(()=>window.timeoutResult='success',()=>window.timeoutResult='timeout');});
   await p.waitForFunction(()=>!!document.querySelector('script[src*="/vendor.js"]'));
@@ -93,6 +141,6 @@ server.on('connection', socket => { sockets.add(socket); socket.on('close', () =
   assert.equal(counts.get('timeout'),1); await p.clock.runFor(15001);await p.waitForFunction(()=>window.timeoutResult==='timeout');
   assert.equal(await p.locator('script[src*="/vendor.js"]').count(),0);
   assert.equal(await p.evaluate(async()=>typeof await testWidget.loadHtml2Canvas()),'function');assert.equal(counts.get('timeout'),2);cases++;await p.close();
-  console.log(JSON.stringify({passed:true,cases,scope:'Full widget UI, real bundled html2canvas, cancellation, retry, timeout and dependency reuse; no reports submitted'}));
+  console.log(JSON.stringify({passed:true,cases,scope:'Real bundled html2canvas: modern colours/transitions, custom checkbox, CSP, long-page content pixels, restoration, cancellation, retry, timeout and lazy loading; no reports submitted'}));
  } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>{for(const socket of sockets)socket.destroy();server.close();});
