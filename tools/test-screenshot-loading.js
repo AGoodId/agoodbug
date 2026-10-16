@@ -11,11 +11,21 @@ const vendor = fs.readFileSync(path.join(root, 'vendor/html2canvas.min.js'));
 const fixtureSource = source.replace('\tfunction boot() {', '\twindow.testWidget = {loadHtml2Canvas, instance: () => agoodbugInstance};\n\tfunction boot() {');
 assert.notEqual(fixtureSource, source);
 const counts = new Map();
+let modernScriptFetches = 0;
 const sockets = new Set();
 const server = http.createServer((req, res) => {
  const url = new URL(req.url, 'http://localhost');
  if (url.pathname === '/widget.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(fixtureSource); return; }
  if (url.pathname === '/widget.css') { res.setHeader('Content-Type', 'text/css'); res.end(fs.readFileSync(path.join(root, 'public/css/agoodbug.css'))); return; }
+ if (url.pathname === '/modern.css') {
+  if(req.headers['sec-fetch-dest']==='empty') modernScriptFetches++;
+  res.setHeader('Content-Type', 'text/css');
+  res.end(`body{background-image:linear-gradient(120deg,color(display-p3 .1 .5 .6),oklch(.8 .12 80))}
+   #modern{color:color(display-p3 .1 .2 .3);background-color:color-mix(in srgb,#fff 90%,#007d8f);box-shadow:0 3px 12px color-mix(in srgb,#000 25%,transparent),inset 0 0 1px color(display-p3 .1 .2 .3);text-shadow:1px 1px oklch(.9 .02 30)}
+   #modern::before{content:'';display:block;width:60px;height:30px;background-color:color-mix(in srgb,#007d8f 80%,white);box-shadow:0 2px 4px color(display-p3 .2 .2 .2 / .3)}
+   #modern::after{content:'color(display-p3) stays text';display:block;color:oklch(.4 .1 200)}`);
+  return;
+ }
  if (url.pathname === '/vendor.js') {
   const mode = url.searchParams.get('mode'); const n = (counts.get(mode) || 0) + 1; counts.set(mode, n);
   if (mode === 'fail' && n === 1) { res.writeHead(503); res.end(); return; }
@@ -26,9 +36,9 @@ const server = http.createServer((req, res) => {
  }
  if (url.pathname === '/') {
   const mode = url.searchParams.get('mode') || 'normal';
-  if(mode==='csp') res.setHeader('Content-Security-Policy', "script-src 'nonce-fixture-nonce'; object-src 'none'");
+  if(mode==='csp'||mode==='modern-csp') res.setHeader('Content-Security-Policy', "script-src 'nonce-fixture-nonce'; style-src 'self' 'nonce-fixture-nonce'; object-src 'none'");
   res.setHeader('Content-Type', 'text/html');
-  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style>body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style></head><body><main><h1>Screenshot regression fixture</h1><section>Public test content. No customer data or report submission.</section></main><div id="agoodbug-widget"></div><script nonce="fixture-nonce">window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script id="agoodbug-js" nonce="fixture-nonce" src="/widget.js"></script></body></html>`); return;
+  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style nonce="fixture-nonce">body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style>${mode.startsWith('modern')?'<link rel="stylesheet" href="/modern.css">':''}</head><body><main><h1>Screenshot regression fixture</h1><section id="modern" style="outline-color:oklch(.5 .1 200)!important;--keep:yes">Public test content. No customer data or report submission.</section></main><div id="agoodbug-widget"></div><script nonce="fixture-nonce">window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script id="agoodbug-js" nonce="fixture-nonce" src="/widget.js"></script></body></html>`); return;
  }
  res.writeHead(404); res.end();
 });
@@ -85,6 +95,35 @@ server.on('connection', socket => { sockets.add(socket); socket.on('close', () =
   p = await open('csp');await takeScreenshot(p);await preview(p);
   assert.equal(await p.locator('script[src*="/vendor.js"]').evaluate(e=>e.nonce),'fixture-nonce');
   assert.equal(counts.get('csp'),1);cases++;await p.close();
+
+  for(const mode of ['modern','modern-csp']) {
+   p=await open(mode);const requestsBefore=modernScriptFetches;
+   const before=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
+   assert.match(before.shadow,/color\(/);assert.match(before.pseudo,/color\(/);
+   const patched=await p.evaluate(async()=>{
+    const restore=await testWidget.instance().applyColorPatch();
+    const e=document.querySelector('#modern'),s=getComputedStyle(e),b=getComputedStyle(e,'::before'),a=getComputedStyle(e,'::after');
+    const values=[s.outlineColor,s.boxShadow,s.textShadow,b.backgroundColor,b.boxShadow,a.color,getComputedStyle(document.body).backgroundImage];
+    const literal=a.content,nonce=[...document.querySelectorAll('style')].at(-1).nonce;
+    restore.forEach(fn=>fn());return {values,literal,nonce};
+   });
+   assert.ok(patched.values.every(v=>!/(?:color|oklch|oklab|lab|lch|color-mix)\(/.test(v)),JSON.stringify(patched));
+   assert.equal(patched.literal,'"color(display-p3) stays text"');assert.equal(patched.nonce,'fixture-nonce');
+   await takeScreenshot(p);await preview(p);
+   const after=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
+   assert.deepEqual(after,before);assert.equal(modernScriptFetches,requestsBefore,'Colour normalization does not fetch stylesheets; the renderer may clone stylesheet links');
+   assert.equal(await p.evaluate(()=>[...document.querySelectorAll('*')].some(e=>[...e.attributes].some(a=>a.name.startsWith('data-agoodbug-colour-')))),false);
+   cases++;await p.close();
+  }
+
+  p=await open('modern-failure');
+  const failureBefore=await p.locator('#modern').evaluate(e=>e.style.cssText);
+  await p.evaluate(async()=>{await testWidget.loadHtml2Canvas();window.html2canvas=async()=>{throw new Error('Deliberate renderer failure after colour normalization');};});
+  await takeScreenshot(p);
+  await p.waitForFunction(()=>document.querySelector('.agoodbug-modal.is-open')&&!document.querySelector('.agoodbug-modal__screenshot-notice').hidden);
+  assert.equal(await p.locator('#modern').evaluate(e=>e.style.cssText),failureBefore);
+  assert.equal(await p.evaluate(()=>[...document.querySelectorAll('*')].some(e=>[...e.attributes].some(a=>a.name.startsWith('data-agoodbug-colour-')))),false);
+  cases++;await p.close();
 
   p = await open('timeout'); await p.clock.install();
   await p.evaluate(()=>{window.timeoutResult=null;testWidget.loadHtml2Canvas().then(()=>window.timeoutResult='success',()=>window.timeoutResult='timeout');});

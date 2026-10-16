@@ -546,6 +546,7 @@
 		applyVisibilityOverride() {
 			const style = document.createElement('style');
 			style.id = 'agoodbug-capture-overrides';
+			if (scriptNonce) style.nonce = scriptNonce;
 			style.textContent = `
 				*, *::before, *::after {
 					opacity: 1 !important;
@@ -610,86 +611,110 @@
 			});
 		}
 
-		// Patch color() CSS functions directly in the live document before html2canvas runs.
-		// html2canvas throws on color(display-p3 …) / color(srgb …) etc. because its own
-		// CSS parser doesn't support them. We convert each one to rgb() via a 1×1 canvas
-		// (the browser converts any color space to sRGB when drawing to canvas).
-		// Returns an array of restore functions; call each after html2canvas finishes.
+		// html2canvas does not parse modern CSS colour functions. Normalize the
+		// browser's resolved values (including shadows, gradients and pseudo
+		// elements), then restore only the temporary declarations we changed.
+		// Stylesheets stay intact: no refetch, disable or text replacement.
 		async applyColorPatch() {
 			const tiny = document.createElement('canvas');
 			tiny.width = tiny.height = 1;
 			const ctx = tiny.getContext('2d');
-
-			const toRgb = (colorStr) => {
-				try {
-					ctx.clearRect(0, 0, 1, 1);
-					ctx.fillStyle = colorStr;
-					ctx.fillRect(0, 0, 1, 1);
-					const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-					if (a === 0) return 'transparent';
-					return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${(a / 255).toFixed(3)})`;
-				} catch (e) {
-					return 'transparent';
-				}
+			if (!ctx) throw new Error('Canvas colour conversion is unavailable');
+			const modern = new Set(['color', 'color-mix', 'lab', 'lch', 'oklab', 'oklch']);
+			const toRgb = (value) => {
+				if (!CSS.supports('color', value)) return value;
+				ctx.clearRect(0, 0, 1, 1);
+				ctx.fillStyle = value;
+				ctx.fillRect(0, 0, 1, 1);
+				const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+				return a === 255 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a / 255})`;
 			};
-
-			const patch = (text) => text.replace(/(?<![a-zA-Z0-9_-])color\(([^)]*)\)/g, (m) => toRgb(m));
-			const restoreFns = [];
-
-			// Patch inline <style> elements
-			document.querySelectorAll('style').forEach(el => {
-				const orig = el.textContent;
-				const patched = patch(orig);
-				if (patched !== orig) {
-					el.textContent = patched;
-					restoreFns.push(() => { el.textContent = orig; });
+			// Walk balanced functions rather than splitting on the first ')'. A
+			// gradient/shadow may contain several colours and nested colour-mix.
+			// Quoted strings and url() payloads must remain literal.
+			const patch = (text) => {
+				let result = '', index = 0;
+				while (index < text.length) {
+					const quote = text[index];
+					if (quote === '\"' || quote === "'") {
+						const start = index++;
+						while (index < text.length) {
+							if (text[index] === '\\') { index += 2; continue; }
+							if (text[index++] === quote) break;
+						}
+						result += text.slice(start, index); continue;
+					}
+					const match = /^[a-zA-Z_-][a-zA-Z0-9_-]*\(/.exec(text.slice(index));
+					if (!match) { result += text[index++]; continue; }
+					const start = index, name = match[0].slice(0, -1).toLowerCase();
+					index += match[0].length;
+					const inner = index;
+					let depth = 1, quoted = '';
+					while (index < text.length && depth) {
+						const ch = text[index++];
+						if (ch === '\\') { index++; continue; }
+						if (quoted) { if (ch === quoted) quoted = ''; continue; }
+						if (ch === '\"' || ch === "'") { quoted = ch; continue; }
+						if (ch === '(') depth++;
+						if (ch === ')') depth--;
+					}
+					if (depth) { result += text.slice(start); break; }
+					const value = text.slice(start, index);
+					result += modern.has(name) ? toRgb(value) : name === 'url' ? value
+						: text.slice(start, inner) + patch(text.slice(inner, index - 1)) + ')';
 				}
-			});
-
-			// Fetch external stylesheets, patch, inject as <style>, disable original <link>
-			const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-			await Promise.all(links.map(async (link) => {
-				const href = link.href;
-				if (!href) return;
-				try {
-					const res = await fetch(href);
-					if (!res.ok) return;
-					const text = await res.text();
-					const patched = patch(text);
-					if (patched === text) return;
-					const style = document.createElement('style');
-					style.textContent = patched;
-					link.insertAdjacentElement('afterend', style);
-					link.disabled = true;
-					restoreFns.push(() => { style.remove(); link.disabled = false; });
-				} catch (e) {}
-			}));
-
-			// Belt-and-suspenders: html2canvas also reads window.getComputedStyle() per
-			// element. In Chrome 111+ this returns color(display-p3 …) natively. Apply
-			// !important inline styles with rgb() equivalents for any element that still
-			// has color() in its computed values after the stylesheet patches above.
-			const colorProps = [
-				'color', 'background-color',
+				return result;
+			};
+			const props = [
+				'color', 'background-color', 'background-image',
 				'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
-				'outline-color', 'text-decoration-color',
+				'outline-color', 'text-decoration-color', 'box-shadow', 'text-shadow',
+				'fill', 'stroke', 'filter',
 			];
-			document.querySelectorAll('*').forEach(el => {
-				const computed = window.getComputedStyle(el);
-				const overrides = {};
-				colorProps.forEach(prop => {
-					const val = computed.getPropertyValue(prop);
-					if (val && val.includes('color(')) overrides[prop] = toRgb(val);
-				});
-				if (!Object.keys(overrides).length) return;
-				const prev = {};
-				colorProps.forEach(prop => { prev[prop] = el.style.getPropertyValue(prop); });
-				Object.entries(overrides).forEach(([p, v]) => el.style.setProperty(p, v, 'important'));
-				restoreFns.push(() => {
-					Object.entries(prev).forEach(([p, v]) => v ? el.style.setProperty(p, v) : el.style.removeProperty(p));
-				});
+			const overrides = (computed) => props.flatMap(prop => {
+				const value = computed.getPropertyValue(prop);
+				const normalized = patch(value);
+				return normalized !== value ? [[prop, normalized]] : [];
 			});
-
+			const restoreFns = [], pseudoRules = [];
+			let attribute = 'data-agoodbug-colour-' + Date.now().toString(36);
+			while (document.querySelector('[' + attribute + ']')) attribute += '-x';
+			let serial = 0;
+			try {
+				document.querySelectorAll('*').forEach(el => {
+					const changes = overrides(getComputedStyle(el));
+					if (changes.length) {
+						const hadStyle = el.hasAttribute('style');
+						const previous = changes.map(([prop]) => [prop, el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop)]);
+						restoreFns.push(() => {
+							previous.forEach(([prop, value, priority]) => value ? el.style.setProperty(prop, value, priority) : el.style.removeProperty(prop));
+							if (!hadStyle && !el.style.length) el.removeAttribute('style');
+						});
+						changes.forEach(([prop, value]) => el.style.setProperty(prop, value, 'important'));
+					}
+					for (const pseudo of ['::before', '::after']) {
+						const computed = getComputedStyle(el, pseudo);
+						if (!computed.content || ['none', 'normal'].includes(computed.content)) continue;
+						const changes = overrides(computed);
+						if (!changes.length) continue;
+						if (!el.hasAttribute(attribute)) {
+							el.setAttribute(attribute, String(++serial));
+							restoreFns.push(() => el.removeAttribute(attribute));
+						}
+						pseudoRules.push('[' + attribute + '="' + el.getAttribute(attribute) + '"]' + pseudo + '{' + changes.map(([prop, value]) => prop + ':' + value + '!important').join(';') + '}');
+					}
+				});
+				if (pseudoRules.length) {
+					const style = document.createElement('style');
+					if (scriptNonce) style.nonce = scriptNonce;
+					style.textContent = pseudoRules.join('\n');
+					restoreFns.push(() => style.remove());
+					document.head.appendChild(style);
+				}
+			} catch (error) {
+				restoreFns.forEach(restore => restore());
+				throw error;
+			}
 			return restoreFns;
 		}
 
