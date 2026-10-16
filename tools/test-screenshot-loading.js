@@ -26,8 +26,9 @@ const server = http.createServer((req, res) => {
  }
  if (url.pathname === '/') {
   const mode = url.searchParams.get('mode') || 'normal';
+  if(mode==='csp') res.setHeader('Content-Security-Policy', "script-src 'nonce-fixture-nonce'; object-src 'none'");
   res.setHeader('Content-Type', 'text/html');
-  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style>body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style></head><body><main><h1>Screenshot regression fixture</h1><section>Public test content. No customer data or report submission.</section></main><div id="agoodbug-widget"></div><script>window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script src="/widget.js"></script></body></html>`); return;
+  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style>body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style></head><body><main><h1>Screenshot regression fixture</h1><section>Public test content. No customer data or report submission.</section></main><div id="agoodbug-widget"></div><script nonce="fixture-nonce">window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script id="agoodbug-js" nonce="fixture-nonce" src="/widget.js"></script></body></html>`); return;
  }
  res.writeHead(404); res.end();
 });
@@ -80,6 +81,10 @@ server.on('connection', socket => { sockets.add(socket); socket.on('close', () =
   p = await open('slow-cancel'); await takeScreenshot(p); await p.keyboard.press('Escape');
   await p.waitForFunction(()=>typeof window.html2canvas==='function'); assert.equal(await p.locator('.agoodbug-modal.is-open').count(),0); assert.equal(await p.locator('img').count(),0);
   await takeScreenshot(p);await preview(p);assert.equal(counts.get('slow-cancel'),1);cases++;await p.close();
+
+  p = await open('csp');await takeScreenshot(p);await preview(p);
+  assert.equal(await p.locator('script[src*="/vendor.js"]').evaluate(e=>e.nonce),'fixture-nonce');
+  assert.equal(counts.get('csp'),1);cases++;await p.close();
 
   p = await open('timeout'); await p.clock.install();
   await p.evaluate(()=>{window.timeoutResult=null;testWidget.loadHtml2Canvas().then(()=>window.timeoutResult='success',()=>window.timeoutResult='timeout');});

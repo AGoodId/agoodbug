@@ -35,6 +35,9 @@
 		return {};
 	}
 
+	// Read the nonce while the WordPress widget script is executing. Its DOM
+	// attribute may be hidden by the browser; the .nonce property remains usable.
+	const scriptNonce = document.currentScript?.nonce || document.getElementById('agoodbug-js')?.nonce || '';
 	let config = getConfig();
 	let strings = config.strings || {};
 	let agoodbugInstance = null;
@@ -71,6 +74,7 @@
 			const timer = setTimeout(() => finish(new Error('Screenshot library timed out')), 15000);
 			script.src = url.href;
 			script.async = true;
+			if (scriptNonce) script.nonce = scriptNonce;
 			script.setAttribute('data-no-optimize', '1');
 			script.setAttribute('data-no-defer', '1');
 			script.onload = () => finish(typeof window.html2canvas === 'function' ? null : new Error('Screenshot library did not initialize'));
