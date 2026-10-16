@@ -55,20 +55,12 @@ class Frontend {
 			return;
 		}
 
-		// html2canvas library
-		wp_enqueue_script(
-			'html2canvas',
-			AGOODBUG_PLUGIN_URL . 'vendor/html2canvas.min.js',
-			[],
-			'1.4.1',
-			true
-		);
 
 		// Main script
 		wp_enqueue_script(
 			'agoodbug',
 			AGOODBUG_PLUGIN_URL . 'public/js/agoodbug.js',
-			[ 'html2canvas' ],
+			[],
 			AGOODBUG_VERSION,
 			true
 		);
@@ -85,6 +77,7 @@ class Frontend {
 		// Localize script
 		wp_localize_script( 'agoodbug', 'agoodbugConfig', [
 			'enabled'        => true,
+			'html2canvasUrl' => add_query_arg( 'ver', '1.4.1', AGOODBUG_PLUGIN_URL . 'vendor/html2canvas.min.js' ),
 			'apiUrl'         => rest_url( 'agoodbug/v1/feedback' ),
 			'proxyUrl'       => rest_url( 'agoodbug/v1/proxy' ),
 			'ajaxUrl'        => admin_url( 'admin-ajax.php' ),

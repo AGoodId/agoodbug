@@ -1,0 +1,10 @@
+{
+  "name": "agoodbug-checks",
+  "private": true,
+  "scripts": {
+    "test": "node --check public/js/agoodbug.js && node tools/test-screenshot-loading.js",
+    "test:php": "php -l includes/class-frontend.php && php -l agoodbug.php && php tools/test-frontend-assets.php"
+  },
+  "devDependencies": { "playwright": "1.62.1" },
+  "engines": { "node": ">=22" }
+}
