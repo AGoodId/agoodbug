@@ -39,6 +39,50 @@
 	let strings = config.strings || {};
 	let agoodbugInstance = null;
 
+	let html2canvasPromise = null;
+	let html2canvasAttempts = 0;
+
+	// General feedback and Screen Capture API need no DOM rasterizer.
+	// Share one in-flight request; failures/timeouts leave a retry possible.
+	function loadHtml2Canvas() {
+		if (typeof window.html2canvas === 'function') {
+			return Promise.resolve(window.html2canvas);
+		}
+		if (html2canvasPromise) return html2canvasPromise;
+		if (!config.html2canvasUrl) return Promise.reject(new Error('Screenshot library URL is missing'));
+
+		html2canvasPromise = new Promise((resolve, reject) => {
+			const script = document.createElement('script');
+			const url = new URL(config.html2canvasUrl, document.baseURI);
+			// Removing a timed-out script does not guarantee its fetch is aborted.
+			// A retry needs its own URL so it cannot join that stalled request.
+			if (html2canvasAttempts++) url.searchParams.set('agoodbugRetry', String(html2canvasAttempts - 1));
+			const finish = (error) => {
+				clearTimeout(timer);
+				script.onload = null;
+				script.onerror = null;
+				if (error) {
+					script.remove();
+					reject(error);
+				} else {
+					resolve(window.html2canvas);
+				}
+			};
+			const timer = setTimeout(() => finish(new Error('Screenshot library timed out')), 15000);
+			script.src = url.href;
+			script.async = true;
+			script.setAttribute('data-no-optimize', '1');
+			script.setAttribute('data-no-defer', '1');
+			script.onload = () => finish(typeof window.html2canvas === 'function' ? null : new Error('Screenshot library did not initialize'));
+			script.onerror = () => finish(new Error('Screenshot library could not load'));
+			document.head.appendChild(script);
+		}).catch(error => {
+			html2canvasPromise = null;
+			throw error;
+		});
+		return html2canvasPromise;
+	}
+
 	function isEnabled(value) {
 		return [ true, 'true', '1', 1 ].includes(value);
 	}
@@ -208,9 +252,7 @@
 						</button>
 					</div>
 					<div class="agoodbug-modal__body">
-						<div class="agoodbug-modal__preview">
-							<img src="" alt="Screenshot preview" />
-						</div>
+						<div class="agoodbug-modal__preview" hidden></div>
 						<div class="agoodbug-modal__sidebar">
 							<div class="agoodbug-modal__screenshot-notice" hidden>
 								<p>${strings.screenshotFailed || 'Skärmbild kunde inte tas — beskriv problemet nedan.'}</p>
@@ -829,9 +871,19 @@
 		}
 
 		async captureViaHtml2Canvas() {
+			const selection = this.selection;
 			let restored = [];
 			let cssRestoreFns = [];
 			try {
+				let capture;
+				try {
+					capture = await loadHtml2Canvas();
+				} catch (error) {
+					if (!this.isCapturing || this.selection !== selection) return;
+					throw error;
+				}
+				// Escape/new selection while loading must not reopen a stale modal.
+				if (!this.isCapturing || this.selection !== selection) return;
 				// Hide our UI
 				this.overlay.classList.remove('is-active');
 
@@ -858,7 +910,7 @@
 				const scaleFit = Math.sqrt( maxArea / (bodyRectPre.width * bodyRectPre.height) );
 				const captureScale = Math.min( dpr, scaleFit );
 
-				const canvas = await html2canvas(document.body, {
+				const canvas = await capture(document.body, {
 					useCORS: true,
 					allowTaint: false,
 					scale: captureScale,
@@ -965,10 +1017,17 @@
 			const screenshotNotice = this.modal.querySelector('.agoodbug-modal__screenshot-notice');
 
 			if (this.screenshot) {
+				if (!this.previewImg) {
+					this.previewImg = document.createElement('img');
+					this.previewImg.alt = 'Screenshot preview';
+				}
 				this.previewImg.src = this.screenshot;
+				previewContainer.replaceChildren(this.previewImg);
 				previewContainer.hidden = false;
 				this.modal.classList.remove('is-general-mode');
 			} else {
+				previewContainer.replaceChildren();
+				this.previewImg = null;
 				previewContainer.hidden = true;
 				this.modal.classList.add('is-general-mode');
 			}
@@ -988,6 +1047,10 @@
 		}
 
 		closeModal() {
+			const previewContainer = this.modal.querySelector('.agoodbug-modal__preview');
+			previewContainer.replaceChildren();
+			previewContainer.hidden = true;
+			this.previewImg = null;
 			this.modal.classList.remove('is-open');
 			this.screenshot = null;
 			this.screenshotFailed = false;

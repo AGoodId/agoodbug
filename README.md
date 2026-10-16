@@ -90,6 +90,10 @@ When a new site is added to the network it automatically inherits the network de
 
 If screenshot capture fails (e.g. on sites using modern CSS color spaces), the modal falls back to a text-only feedback form with a notice.
 
+The optional html2canvas library is loaded from this plugin only when its screenshot fallback is used. Initial page views, general feedback and the Screen Capture API do not download it. Failed or timed-out loads leave text feedback available and can be retried. Screenshot previews exist only while a captured image is being reviewed.
+
+Developer checks: `npm ci`, `npx playwright install chromium`, `npm test` and `npm run test:php`. Set `AGOODBUG_CHROME_PATH` to use an existing Chromium/Chrome binary. The browser checks use local fixture content and do not submit feedback.
+
 ## Report Data
 
 Each report stores:
