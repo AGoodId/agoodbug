@@ -689,10 +689,17 @@
 				return normalized !== value ? [[prop, normalized]] : [];
 			});
 			const restoreFns = [], pseudoRules = [];
+			// Interpolating from a modern colour to its RGB equivalent can itself
+			// expose oklab() while a CSS transition is running. Normalize a stable
+			// frame, and keep transitions paused until the declarations are restored.
+			const freeze = document.createElement('style');
+			if (scriptNonce) freeze.nonce = scriptNonce;
+			freeze.textContent = '*,*::before,*::after{transition:none!important;animation-play-state:paused!important}';
 			let attribute = 'data-agoodbug-colour-' + Date.now().toString(36);
 			while (document.querySelector('[' + attribute + ']')) attribute += '-x';
 			let serial = 0;
 			try {
+				document.head.appendChild(freeze);
 				document.querySelectorAll('*').forEach(el => {
 					const changes = overrides(getComputedStyle(el));
 					if (changes.length) {
@@ -725,8 +732,14 @@
 				}
 			} catch (error) {
 				restoreFns.forEach(restore => restore());
+				freeze.remove();
 				throw error;
 			}
+			restoreFns.push(() => {
+				// Flush the restored layout before transitions resume.
+				document.body.getBoundingClientRect();
+				freeze.remove();
+			});
 			return restoreFns;
 		}
 
@@ -934,12 +947,11 @@
 				// Replace cross-origin images with proxied data URLs
 				restored = await this.proxyCrossOriginImages();
 
-				// Patch color() functions in live document before html2canvas reads CSS
-				cssRestoreFns = await this.applyColorPatch();
-
 				// Force visibility — kills GSAP/ScrollTrigger-driven hidden states
 				// that html2canvas's clone iframe would otherwise capture as blank.
 				cssRestoreFns.push( this.applyVisibilityOverride() );
+				// Resolve colours after reveal/GSAP changes, with CSS transitions paused.
+				cssRestoreFns.push( ...await this.applyColorPatch() );
 
 				// Compute a safe scale: long pages produce huge canvases that hit
 				// browser limits (Safari ~16 megapixels, others vary) and only render
@@ -956,11 +968,19 @@
 					allowTaint: false,
 					scale: captureScale,
 					logging: false,
+					onclone: (doc) => {
+						// html2canvas synthesizes pseudo children for styled controls.
+						// INPUT is void: these children cannot paint and have empty
+						// computed colours. Its native checked state is rendered separately.
+						doc.querySelectorAll('input > html2canvaspseudoelement').forEach(el => el.remove());
+					},
 				});
 
 				// Restore CSS patches and image sources
 				cssRestoreFns.forEach(fn => fn());
+				cssRestoreFns = [];
 				this.restoreImages(restored);
+				restored = [];
 
 				// Detect blank canvas — html2canvas silently fails on unsupported CSS
 				// (e.g. oklch(), color-mix()). Sample pixels; if >90% are uniform, bail out.

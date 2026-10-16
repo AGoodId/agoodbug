@@ -21,9 +21,10 @@ const server = http.createServer((req, res) => {
   if(req.headers['sec-fetch-dest']==='empty') modernScriptFetches++;
   res.setHeader('Content-Type', 'text/css');
   res.end(`body{background-image:linear-gradient(120deg,color(display-p3 .1 .5 .6),oklch(.8 .12 80))}
-   #modern{color:color(display-p3 .1 .2 .3);background-color:color-mix(in srgb,#fff 90%,#007d8f);box-shadow:0 3px 12px color-mix(in srgb,#000 25%,transparent),inset 0 0 1px color(display-p3 .1 .2 .3);text-shadow:1px 1px oklch(.9 .02 30)}
+   #modern{transition:background-color .6s,color .6s,box-shadow .6s;color:color(display-p3 .1 .2 .3);background-color:color-mix(in srgb,#fff 90%,#007d8f);box-shadow:0 3px 12px color-mix(in srgb,#000 25%,transparent),inset 0 0 1px color(display-p3 .1 .2 .3);text-shadow:1px 1px oklch(.9 .02 30)}
    #modern::before{content:'';display:block;width:60px;height:30px;background-color:color-mix(in srgb,#007d8f 80%,white);box-shadow:0 2px 4px color(display-p3 .2 .2 .2 / .3)}
-   #modern::after{content:'color(display-p3) stays text';display:block;color:oklch(.4 .1 200)}`);
+   #modern::after{content:'color(display-p3) stays text';display:block;color:oklch(.4 .1 200)}
+   #capture-check{appearance:none;position:relative;width:24px;height:24px}#capture-check::before{content:'✓';position:absolute;inset:0;background-color:color-mix(in srgb,#007d8f 90%,white)}`);
   return;
  }
  if (url.pathname === '/vendor.js') {
@@ -39,7 +40,7 @@ const server = http.createServer((req, res) => {
   if(mode==='csp'||mode==='modern-csp') res.setHeader('Content-Security-Policy', "script-src 'nonce-fixture-nonce'; style-src 'self' 'nonce-fixture-nonce'; object-src 'none'");
   res.setHeader('Content-Type', 'text/html');
   const longStyle=mode==='modern-long'?'<style nonce="fixture-nonce">.long-spacer{height:2400px}#agoodbug-widget .agoodbug-button{position:static;display:block;transform:none;margin:20px auto;width:120px}#modern{background-image:linear-gradient(90deg,#123456 50%,#fedcba 50%)}</style>':'';
-  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style nonce="fixture-nonce">body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style>${mode.startsWith('modern')?'<link rel="stylesheet" href="/modern.css">':''}${longStyle}</head><body>${mode==='modern-long'?'<div class="long-spacer" aria-hidden="true"></div><div aria-hidden="true" style="position:fixed;inset:0;background:red;opacity:0;pointer-events:none">Hidden UI</div>':''}<main><h1>Screenshot regression fixture</h1><section id="modern" style="outline-color:oklch(.5 .1 200)!important;--keep:yes">Public test content. No customer data or report submission.</section></main><div id="agoodbug-widget"></div><script nonce="fixture-nonce">window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script id="agoodbug-js" nonce="fixture-nonce" src="/widget.js"></script></body></html>`); return;
+  res.end(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/widget.css"><style nonce="fixture-nonce">body{margin:0;min-height:700px;background:linear-gradient(120deg,#1a7b8a,#e9ab43);font:18px sans-serif}main{padding:40px;width:600px}h1{color:white}section{padding:30px;background:#fff8;margin:20px 0}</style>${mode.startsWith('modern')?'<link rel="stylesheet" href="/modern.css">':''}${longStyle}</head><body>${mode==='modern-long'?'<div class="long-spacer" aria-hidden="true"></div><div aria-hidden="true" style="position:fixed;inset:0;background:red;opacity:0;pointer-events:none">Hidden UI</div>':''}<main><h1>Screenshot regression fixture</h1><section id="modern" style="outline-color:oklch(.5 .1 200)!important;--keep:yes">Public test content. No customer data or report submission.</section>${mode.startsWith('modern')?'<input id="capture-check" type="checkbox" checked aria-label="Test checkbox">':''}</main><div id="agoodbug-widget"></div><script nonce="fixture-nonce">window.agoodbugConfig={enabled:true,html2canvasUrl:'/vendor.js?mode=${mode}',buttonStyle:'tab-side',tabLabel:'Feedback',showEmailField:false,strings:{buttonTitle:'Report',commentLabel:'Describe',submitButton:'Send',cancelButton:'Cancel',closeButton:'Close',screenshotFailed:'Screenshot unavailable'}};Object.defineProperty(navigator,'mediaDevices',{value:undefined,configurable:true});</script><script id="agoodbug-js" nonce="fixture-nonce" src="/widget.js"></script></body></html>`); return;
  }
  res.writeHead(404); res.end();
 });
@@ -112,7 +113,7 @@ server.on('connection', socket => { sockets.add(socket); socket.on('close', () =
    assert.equal(patched.literal,'"color(display-p3) stays text"');assert.equal(patched.nonce,'fixture-nonce');
    await takeScreenshot(p);await preview(p);
    const after=await p.locator('#modern').evaluate(e=>({css:e.style.cssText,priority:e.style.getPropertyPriority('outline-color'),shadow:getComputedStyle(e).boxShadow,pseudo:getComputedStyle(e,'::before').backgroundColor,styleCount:document.querySelectorAll('style').length}));
-   assert.deepEqual(after,before);assert.equal(modernScriptFetches,requestsBefore,'Colour normalization does not fetch stylesheets; the renderer may clone stylesheet links');
+   assert.deepEqual(after,before);assert.equal(await p.locator('#capture-check').isChecked(),true);assert.equal(modernScriptFetches,requestsBefore,'Colour normalization does not fetch stylesheets; the renderer may clone stylesheet links');
    assert.equal(await p.evaluate(()=>[...document.querySelectorAll('*')].some(e=>[...e.attributes].some(a=>a.name.startsWith('data-agoodbug-colour-')||a.name.startsWith('data-agoodbug-hidden-')))),false);
    cases++;await p.close();
   }
@@ -140,6 +141,6 @@ server.on('connection', socket => { sockets.add(socket); socket.on('close', () =
   assert.equal(counts.get('timeout'),1); await p.clock.runFor(15001);await p.waitForFunction(()=>window.timeoutResult==='timeout');
   assert.equal(await p.locator('script[src*="/vendor.js"]').count(),0);
   assert.equal(await p.evaluate(async()=>typeof await testWidget.loadHtml2Canvas()),'function');assert.equal(counts.get('timeout'),2);cases++;await p.close();
-  console.log(JSON.stringify({passed:true,cases,scope:'Full widget UI, real bundled html2canvas, cancellation, retry, timeout and dependency reuse; no reports submitted'}));
+  console.log(JSON.stringify({passed:true,cases,scope:'Real bundled html2canvas: modern colours/transitions, custom checkbox, CSP, long-page content pixels, restoration, cancellation, retry, timeout and lazy loading; no reports submitted'}));
  } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>{for(const socket of sockets)socket.destroy();server.close();});
