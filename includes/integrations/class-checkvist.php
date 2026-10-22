@@ -16,6 +16,21 @@ class Checkvist {
 	 */
 	const API_URL = 'https://checkvist.com/checklists/';
 
+	/** Accept a list ID or its canonical Checkvist URL, never an arbitrary host/path. */
+	public static function normalize_list_id( $value ) {
+		if ( ! is_string( $value ) && ! is_int( $value ) ) {
+			return '';
+		}
+		$value = trim( (string) $value );
+		if ( preg_match( '/^[1-9][0-9]*$/D', $value ) ) {
+			return $value;
+		}
+		if ( preg_match( '~^https://checkvist\.com/checklists/([1-9][0-9]*)/?(?:[?#][^\s]*)?$~iD', $value, $match ) ) {
+			return $match[1];
+		}
+		return '';
+	}
+
 	/**
 	 * Send feedback to Checkvist
 	 *
@@ -29,7 +44,7 @@ class Checkvist {
 
 		$username = $settings['checkvist_username'] ?? '';
 		$api_key  = $settings['checkvist_api_key'] ?? '';
-		$list_id  = $settings['checkvist_list_id'] ?? '';
+		$list_id  = self::normalize_list_id( $settings['checkvist_list_id'] ?? '' );
 
 		error_log( 'AGoodBug - Checkvist: Starting send. Username: ' . ( $username ? 'set' : 'empty' ) . ', API key: ' . ( $api_key ? 'set' : 'empty' ) . ', List ID: ' . $list_id );
 
@@ -43,21 +58,13 @@ class Checkvist {
 		// Build task content: user's comment with ^today for due date
 		$task_content = $data['comment'] . ' ^today';
 
-		// Use simple tasks endpoint
-		$api_url = add_query_arg(
-			[
-				'username' => $username,
-				'api_key'  => $api_key,
-			],
-			self::API_URL . $list_id . '/tasks.json'
-		);
-
-		error_log( 'AGoodBug - Checkvist: Calling API URL: ' . preg_replace( '/api_key=[^&]+/', 'api_key=***', $api_url ) );
+		$api_url = self::API_URL . $list_id . '/tasks.json';
 
 		// Create task
 		$response = wp_remote_post( $api_url, [
 			'headers' => [
-				'Content-Type' => 'application/json',
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Basic ' . base64_encode( $username . ':' . $api_key ),
 			],
 			'body'    => wp_json_encode( [
 				'task' => [
@@ -65,7 +72,8 @@ class Checkvist {
 					'due_date' => 'today',
 				],
 			] ),
-			'timeout' => 30,
+			'timeout'     => 30,
+			'redirection' => 0,
 		] );
 
 		if ( is_wp_error( $response ) ) {
@@ -77,7 +85,6 @@ class Checkvist {
 		$body_content = wp_remote_retrieve_body( $response );
 
 		error_log( 'AGoodBug - Checkvist response code: ' . $code );
-		error_log( 'AGoodBug - Checkvist response body: ' . substr( $body_content, 0, 500 ) );
 
 		$result = json_decode( $body_content, true );
 
@@ -92,7 +99,7 @@ class Checkvist {
 			return $task_id;
 		}
 
-		error_log( 'AGoodBug - Checkvist: Failed to create task. Code: ' . $code . ', Body: ' . $body_content );
+		error_log( 'AGoodBug - Checkvist: Failed to create task. Code: ' . $code );
 		return false;
 	}
 
@@ -107,24 +114,20 @@ class Checkvist {
 	 * @return bool
 	 */
 	private function add_comment( $list_id, $task_id, $comment, $username, $api_key ) {
-		$api_url = add_query_arg(
-			[
-				'username' => $username,
-				'api_key'  => $api_key,
-			],
-			self::API_URL . $list_id . '/tasks/' . $task_id . '/comments.json'
-		);
+		$api_url = self::API_URL . $list_id . '/tasks/' . $task_id . '/comments.json';
 
 		$response = wp_remote_post( $api_url, [
 			'headers' => [
-				'Content-Type' => 'application/json',
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Basic ' . base64_encode( $username . ':' . $api_key ),
 			],
 			'body'    => wp_json_encode( [
 				'comment' => [
 					'comment' => $comment,
 				],
 			] ),
-			'timeout' => 30,
+			'timeout'     => 30,
+			'redirection' => 0,
 		] );
 
 		if ( is_wp_error( $response ) ) {

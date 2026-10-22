@@ -221,7 +221,10 @@ class Settings {
 			[ $this, 'render_text_field' ],
 			'agoodbug',
 			'agoodbug_checkvist',
-			[ 'name' => 'checkvist_list_id' ]
+			[
+				'name' => 'checkvist_list_id',
+				'description' => __( 'List ID (for example 955149) or the full https://checkvist.com/checklists/955149 URL.', 'agoodbug' ),
+			]
 		);
 
 		// Slack section
@@ -660,7 +663,7 @@ class Settings {
 		$sanitized['checkvist_enabled']  = ! empty( $input['checkvist_enabled'] );
 		$sanitized['checkvist_username'] = sanitize_email( $input['checkvist_username'] ?? '' );
 		$sanitized['checkvist_api_key']  = sanitize_text_field( $input['checkvist_api_key'] ?? '' );
-		$sanitized['checkvist_list_id']  = sanitize_text_field( $input['checkvist_list_id'] ?? '' );
+		$sanitized['checkvist_list_id']  = Integrations\Checkvist::normalize_list_id( $input['checkvist_list_id'] ?? '' );
 
 		// AGoodApp
 		$sanitized['agoodmember_enabled']    = ! empty( $input['agoodmember_enabled'] );
