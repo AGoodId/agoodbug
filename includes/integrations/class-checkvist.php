@@ -73,14 +73,12 @@ class Checkvist {
 
 		$user = wp_get_current_user();
 
-		// Build task content: user's comment with ^today for due date
-		$task_content = $data['comment'] . ' ^today';
-
 		$api_url = self::API_URL . $list_id . '/tasks.json';
 		$task    = [
-			'content'  => $task_content,
+			'content'  => $data['comment'],
 			// Checkvist expects comma-separated tag names without #.
 			'tags'     => 'todo,agoodbug',
+			// Set the date via the API field, without adding smart syntax to the text.
 			'due_date' => 'today',
 		];
 		if ( ! empty( $destination['parent_id'] ) ) {
