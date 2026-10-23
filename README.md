@@ -61,7 +61,7 @@ Enter one email address per line in **Email Recipients**. Leave empty to use eac
 1. Get your API key from [checkvist.com/auth/profile](https://checkvist.com/auth/profile)
 2. Enter your username, API key and destination in **List or parent node URL**:
    - A list ID (`955149`) or list URL (`https://checkvist.com/checklists/955149`) adds reports at the top level.
-   - A node URL (`https://checkvist.com/checklists/955149/tasks/75603537`) adds reports as children of that node.
+   - A node URL (`https://checkvist.com/checklists/955149/tasks/75603537`) adds reports as children of that node. Use the full `/checklists/LIST_ID/tasks/NODE_ID` URL containing both IDs; short `/cvt/` permalinks are not supported.
 3. Enable Checkvist and add it to Destinations
 
 #### AGoodApp

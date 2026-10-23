@@ -504,7 +504,7 @@ class Network_Settings {
 						<th scope="row"><?php esc_html_e( 'Checkvist list or parent node URL', 'agoodbug' ); ?></th>
 						<td>
 							<input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_list_id]' ); ?>" value="<?php echo esc_attr( $settings['checkvist_list_id'] ); ?>" class="regular-text" />
-							<p class="description"><?php esc_html_e( 'Enter a list ID or list URL to add reports at the top level, or a node URL such as https://checkvist.com/checklists/955149/tasks/75603537 to add reports as children of that node.', 'agoodbug' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Enter a list ID or a full /checklists/ URL. For example, https://checkvist.com/checklists/955149 adds reports at the top level; https://checkvist.com/checklists/955149/tasks/75603537 adds children of that node. Short /cvt/ links are not supported; use the full URL containing both the list ID and node ID.', 'agoodbug' ); ?></p>
 						</td>
 					</tr>
 				</table>

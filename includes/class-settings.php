@@ -223,7 +223,7 @@ class Settings {
 			'agoodbug_checkvist',
 			[
 				'name' => 'checkvist_list_id',
-				'description' => __( 'Enter a list ID or list URL to add reports at the top level, or a node URL such as https://checkvist.com/checklists/955149/tasks/75603537 to add reports as children of that node.', 'agoodbug' ),
+				'description' => __( 'Enter a list ID or a full /checklists/ URL. For example, https://checkvist.com/checklists/955149 adds reports at the top level; https://checkvist.com/checklists/955149/tasks/75603537 adds children of that node. Short /cvt/ links are not supported; use the full URL containing both the list ID and node ID.', 'agoodbug' ),
 			]
 		);
 
