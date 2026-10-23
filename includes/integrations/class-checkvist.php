@@ -16,19 +16,36 @@ class Checkvist {
 	 */
 	const API_URL = 'https://checkvist.com/checklists/';
 
-	/** Accept a list ID or its canonical Checkvist URL, never an arbitrary host/path. */
-	public static function normalize_list_id( $value ) {
+	/** Parse a list ID, list URL or task URL, never an arbitrary host/path. */
+	public static function parse_destination( $value ) {
 		if ( ! is_string( $value ) && ! is_int( $value ) ) {
-			return '';
+			return null;
 		}
 		$value = trim( (string) $value );
 		if ( preg_match( '/^[1-9][0-9]*$/D', $value ) ) {
-			return $value;
+			return [ 'list_id' => $value, 'parent_id' => '' ];
 		}
-		if ( preg_match( '~^https://checkvist\.com/checklists/([1-9][0-9]*)/?(?:[?#][^\s]*)?$~iD', $value, $match ) ) {
-			return $match[1];
+		if ( preg_match( '~^https://checkvist\.com/checklists/([1-9][0-9]*)(?:/tasks/([1-9][0-9]*))?/?(?:[?#][^\s]*)?$~iD', $value, $match ) ) {
+			return [ 'list_id' => $match[1], 'parent_id' => $match[2] ?? '' ];
 		}
-		return '';
+		return null;
+	}
+
+	/** Keep the parent in saved settings; list-only destinations retain their numeric ID. */
+	public static function normalize_destination( $value ) {
+		$destination = self::parse_destination( $value );
+		if ( ! $destination ) {
+			return '';
+		}
+		return $destination['parent_id']
+			? self::API_URL . $destination['list_id'] . '/tasks/' . $destination['parent_id']
+			: $destination['list_id'];
+	}
+
+	/** Extract just the list ID for callers that do not need a parent. */
+	public static function normalize_list_id( $value ) {
+		$destination = self::parse_destination( $value );
+		return $destination['list_id'] ?? '';
 	}
 
 	/**
@@ -42,9 +59,10 @@ class Checkvist {
 	public function send( $data, $screenshot_url, $post_id ) {
 		$settings = Plugin::get_settings();
 
-		$username = $settings['checkvist_username'] ?? '';
-		$api_key  = $settings['checkvist_api_key'] ?? '';
-		$list_id  = self::normalize_list_id( $settings['checkvist_list_id'] ?? '' );
+		$username    = $settings['checkvist_username'] ?? '';
+		$api_key     = $settings['checkvist_api_key'] ?? '';
+		$destination = self::parse_destination( $settings['checkvist_list_id'] ?? '' );
+		$list_id     = $destination['list_id'] ?? '';
 
 		error_log( 'AGoodBug - Checkvist: Starting send. Username: ' . ( $username ? 'set' : 'empty' ) . ', API key: ' . ( $api_key ? 'set' : 'empty' ) . ', List ID: ' . $list_id );
 
@@ -59,6 +77,15 @@ class Checkvist {
 		$task_content = $data['comment'] . ' ^today';
 
 		$api_url = self::API_URL . $list_id . '/tasks.json';
+		$task    = [
+			'content'  => $task_content,
+			// Checkvist expects comma-separated tag names without #.
+			'tags'     => 'todo,agoodbug',
+			'due_date' => 'today',
+		];
+		if ( ! empty( $destination['parent_id'] ) ) {
+			$task['parent_id'] = $destination['parent_id'];
+		}
 
 		// Create task
 		$response = wp_remote_post( $api_url, [
@@ -67,12 +94,7 @@ class Checkvist {
 				'Authorization' => 'Basic ' . base64_encode( $username . ':' . $api_key ),
 			],
 			'body'    => wp_json_encode( [
-				'task' => [
-					'content'  => $task_content,
-					// Checkvist expects comma-separated tag names without #.
-					'tags'     => 'todo,agoodbug',
-					'due_date' => 'today',
-				],
+				'task' => $task,
 			] ),
 			'timeout'     => 30,
 			'redirection' => 0,
