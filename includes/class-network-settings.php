@@ -108,7 +108,7 @@ class Network_Settings {
 			'checkvist_enabled'      => ! empty( $input['checkvist_enabled'] ),
 			'checkvist_username'     => sanitize_text_field( $input['checkvist_username'] ?? '' ),
 			'checkvist_api_key'      => sanitize_text_field( $input['checkvist_api_key'] ?? '' ),
-			'checkvist_list_id'      => sanitize_text_field( $input['checkvist_list_id'] ?? '' ),
+			'checkvist_list_id'      => Integrations\Checkvist::normalize_destination( $input['checkvist_list_id'] ?? '' ),
 			// AGoodApp
 			'agoodmember_enabled'    => ! empty( $input['agoodmember_enabled'] ),
 			'agoodmember_token'      => sanitize_text_field( $input['agoodmember_token'] ?? '' ),
@@ -501,8 +501,11 @@ class Network_Settings {
 						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_api_key]' ); ?>" value="<?php echo esc_attr( $settings['checkvist_api_key'] ); ?>" class="regular-text" /></td>
 					</tr>
 					<tr>
-						<th scope="row"><?php esc_html_e( 'Checkvist List ID', 'agoodbug' ); ?></th>
-						<td><input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_list_id]' ); ?>" value="<?php echo esc_attr( $settings['checkvist_list_id'] ); ?>" class="regular-text" /></td>
+						<th scope="row"><?php esc_html_e( 'Checkvist list or parent node URL', 'agoodbug' ); ?></th>
+						<td>
+							<input type="text" name="<?php echo esc_attr( self::OPTION_NAME . '[checkvist_list_id]' ); ?>" value="<?php echo esc_attr( $settings['checkvist_list_id'] ); ?>" class="regular-text" />
+							<p class="description"><?php esc_html_e( 'Enter a list ID or a full /checklists/ URL. For example, https://checkvist.com/checklists/955149 adds reports at the top level; https://checkvist.com/checklists/955149/tasks/75603537 adds children of that node. Short /cvt/ links are not supported; use the full URL containing both the list ID and node ID.', 'agoodbug' ); ?></p>
+						</td>
 					</tr>
 				</table>
 

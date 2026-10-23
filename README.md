@@ -42,7 +42,7 @@ Reports can be sent to one or more destinations simultaneously:
 - **WordPress** — always saved as a Custom Post Type (`agoodbug_report`)
 - **Email** — sent to configured recipients (falls back to site admin email)
 - **Slack** — posted via Incoming Webhook with screenshot preview
-- **Checkvist** — creates a task in a checklist
+- **Checkvist** — creates a task in a checklist with the tags `#todo` and `#agoodbug` (including resends)
 - **AGoodApp** — sends to an AGoodApp project
 - **Asana** — creates a Ybug-like task with metadata and screenshot attachment
 
@@ -59,7 +59,9 @@ Enter one email address per line in **Email Recipients**. Leave empty to use eac
 
 #### Checkvist
 1. Get your API key from [checkvist.com/auth/profile](https://checkvist.com/auth/profile)
-2. Enter your username, API key and List ID
+2. Enter your username, API key and destination in **List or parent node URL**:
+   - A list ID (`955149`) or list URL (`https://checkvist.com/checklists/955149`) adds reports at the top level.
+   - A node URL (`https://checkvist.com/checklists/955149/tasks/75603537`) adds reports as children of that node. Use the full `/checklists/LIST_ID/tasks/NODE_ID` URL containing both IDs; short `/cvt/` permalinks are not supported.
 3. Enable Checkvist and add it to Destinations
 
 #### AGoodApp
