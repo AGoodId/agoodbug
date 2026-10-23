@@ -72,7 +72,7 @@ namespace {
  ok($requests[0][0]==='https://checkvist.com/checklists/955149/tasks.json','Fixed task endpoint');ok($requests[1][0]==='https://checkvist.com/checklists/955149/tasks/123/comments.json','Fixed note endpoint');
  $task=json_decode($requests[0][1]['body'],true)['task'];
  ok($task['tags']==='todo,agoodbug','Native Checkvist comma-separated tags without #');
- ok($task['content']==='Synthetic regression ^today','Report text preserved without appended tag text');
+ ok($task['content']==='Synthetic regression','Report text preserved without appended date syntax');
  ok($task['due_date']==='today','Due date preserved');
  $body=json_decode($requests[1][1]['body'],true);ok(strpos($body['comment']['comment'],'https://example.invalid/screenshot.png')!==false,'Screenshot preserved');
  ok(strpos($body['comment']['comment'],'URL: https://example.invalid/page')!==false,'Page URL preserved');
@@ -84,7 +84,8 @@ namespace {
  $task=json_decode($requests[0][1]['body'],true)['task'];
  ok($task['tags']==='todo,agoodbug','Resends always set native tags');
  ok($task['parent_id']==='75603537','Resends retain selected parent');
- ok($task['content']===$comment.' ^today','Multiline report text with hashtags preserved');
+ ok($task['content']===$comment,'Multiline report text with hashtags preserved without appended date syntax');
+ ok($task['due_date']==='today','Resends set due date through the API field');
  $requests=[];$responses=[['code'=>422,'body'=>'{"error":"Parent not found"}']];
  ok((new $class)->send(['comment'=>'x','url'=>'x'],'',1)===false,'Rejected parent fails delivery');
  ok(count($requests)===1,'No fallback to top level after parent rejection');
