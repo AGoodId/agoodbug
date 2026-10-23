@@ -42,7 +42,7 @@ Reports can be sent to one or more destinations simultaneously:
 - **WordPress** — always saved as a Custom Post Type (`agoodbug_report`)
 - **Email** — sent to configured recipients (falls back to site admin email)
 - **Slack** — posted via Incoming Webhook with screenshot preview
-- **Checkvist** — creates a task in a checklist
+- **Checkvist** — creates a task in a checklist with the tags `#todo` and `#agoodbug` (including resends)
 - **AGoodApp** — sends to an AGoodApp project
 - **Asana** — creates a Ybug-like task with metadata and screenshot attachment
 

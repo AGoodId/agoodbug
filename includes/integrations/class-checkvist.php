@@ -69,6 +69,8 @@ class Checkvist {
 			'body'    => wp_json_encode( [
 				'task' => [
 					'content'  => $task_content,
+					// Checkvist expects comma-separated tag names without #.
+					'tags'     => 'todo,agoodbug',
 					'due_date' => 'today',
 				],
 			] ),

@@ -25,9 +25,21 @@ namespace {
  ok($result==='123','Task ID');ok(count($requests)===2,'Task and note');
  foreach($requests as[$url,$args]){ok(strpos($url,'?')===false,'No credentials in URL');ok($args['headers']['Authorization']==='Basic '.base64_encode('test@example.invalid:synthetic-secret'),'Basic auth');ok($args['redirection']===0,'No credential redirects');ok($args['timeout']===30,'Bounded timeout');}
  ok($requests[0][0]==='https://checkvist.com/checklists/955149/tasks.json','Fixed task endpoint');ok($requests[1][0]==='https://checkvist.com/checklists/955149/tasks/123/comments.json','Fixed note endpoint');
+ $task=json_decode($requests[0][1]['body'],true)['task'];
+ ok($task['tags']==='todo,agoodbug','Native Checkvist comma-separated tags without #');
+ ok($task['content']==='Synthetic regression ^today','Report text preserved without appended tag text');
+ ok($task['due_date']==='today','Due date preserved');
  $body=json_decode($requests[1][1]['body'],true);ok(strpos($body['comment']['comment'],'https://example.invalid/screenshot.png')!==false,'Screenshot preserved');
+ ok(strpos($body['comment']['comment'],'URL: https://example.invalid/page')!==false,'Page URL preserved');
+ // A resend uses the same send method and must supply native tags again, even for multiline text.
+ $requests=[];$responses=[['code'=>201,'body'=>'{"id":124}'],['code'=>201,'body'=>'{"id":457}']];
+ $comment="Rapport med #todo och #agoodbug\nAndra raden";
+ ok((new $class)->send(['comment'=>$comment,'url'=>'https://example.invalid/page'],'',1)==='124','Resend task ID');
+ $task=json_decode($requests[0][1]['body'],true)['task'];
+ ok($task['tags']==='todo,agoodbug','Resends always set native tags');
+ ok($task['content']===$comment.' ^today','Multiline report text with hashtags preserved');
  $requests=[];$responses=[['code'=>401,'body'=>'synthetic-secret should never be logged']];ok((new $class)->send(['comment'=>'x','url'=>'x'],'',1)===false,'Auth failure');ok(count($requests)===1,'No note after failed task');
  $requests=[];$responses=[new WP_Error()];ok((new $class)->send(['comment'=>'x','url'=>'x'],'',1)===false,'Network failure');
  \AGoodBug\Plugin::$settings['checkvist_list_id']='https://evil.test/checklists/955149';$requests=[];ok((new $class)->send(['comment'=>'x','url'=>'x'],'',1)===false,'Invalid list fails');ok(!$requests,'Invalid list makes no request');
- echo "Checkvist normalization/auth/task/note/failure tests passed\n";
+ echo "Checkvist normalization/auth/task/tags/resend/note/failure tests passed\n";
 }
