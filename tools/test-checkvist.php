@@ -66,7 +66,7 @@ namespace {
  $requests=[];
  \AGoodBug\Plugin::$settings=['checkvist_username'=>'test@example.invalid','checkvist_api_key'=>'synthetic-secret','checkvist_list_id'=>'https://checkvist.com/checklists/955149'];
  $responses=[['code'=>201,'body'=>'{"id":123}'],['code'=>201,'body'=>'{"id":456}']];
- $result=(new $class)->send(['comment'=>'Synthetic regression','url'=>'https://example.invalid/page','email'=>'test@example.invalid'],'https://example.invalid/screenshot.png',1);
+ $result=(new $class)->send(['comment'=>'Synthetic regression','url'=>'https://example.invalid/page','email'=>'test@example.invalid'],'',1);
  ok($result==='123','Task ID');ok(count($requests)===2,'Task and note');
  foreach($requests as[$url,$args]){ok(strpos($url,'?')===false,'No credentials in URL');ok($args['headers']['Authorization']==='Basic '.base64_encode('test@example.invalid:synthetic-secret'),'Basic auth');ok($args['redirection']===0,'No credential redirects');ok($args['timeout']===30,'Bounded timeout');}
  ok($requests[0][0]==='https://checkvist.com/checklists/955149/tasks.json','Fixed task endpoint');ok($requests[1][0]==='https://checkvist.com/checklists/955149/tasks/123/comments.json','Fixed note endpoint');
@@ -74,7 +74,9 @@ namespace {
  ok($task['tags']==='todo,agoodbug','Native Checkvist comma-separated tags without #');
  ok($task['content']==='Synthetic regression','Report text preserved without appended date syntax');
  ok($task['due_date']==='today','Due date preserved');
- $body=json_decode($requests[1][1]['body'],true);ok(strpos($body['comment']['comment'],'https://example.invalid/screenshot.png')!==false,'Screenshot preserved');
+ $body=json_decode($requests[1][1]['body'],true);
+ $note_method=new \ReflectionMethod($class,'build_note');$note_method->setAccessible(true);
+ ok(strpos($note_method->invoke(new $class,['url'=>'https://example.invalid/page'],(object)['ID'=>0],'https://example.invalid/screenshot.png'),'https://example.invalid/screenshot.png')!==false,'Screenshot reference remains in native-import metadata');
  ok(strpos($body['comment']['comment'],'URL: https://example.invalid/page')!==false,'Page URL preserved');
  // A resend uses the same send method and must supply native tags again, even for multiline text.
  \AGoodBug\Plugin::$settings['checkvist_list_id']=$node;
