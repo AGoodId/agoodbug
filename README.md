@@ -64,6 +64,34 @@ Enter one email address per line in **Email Recipients**. Leave empty to use eac
    - A node URL (`https://checkvist.com/checklists/955149/tasks/75603537`) adds reports as children of that node. Use the full `/checklists/LIST_ID/tasks/NODE_ID` URL containing both IDs; short `/cvt/` permalinks are not supported.
 3. Enable Checkvist and add it to Destinations
 
+Screenshot reports submit the original local PNG through Checkvist's documented
+multipart `import.json` API. The imported item is then updated with the exact
+report text, native tags and due date, under the selected parent if configured.
+Text-only reports retain the normal task API. No image URL is fetched by the
+integration, and uploads are restricted to readable PNG files inside the current
+site's uploads directory (maximum 10 MB, or the smaller configured limit).
+
+Native file storage requires **Checkvist PRO and available upload space**.
+Checkvist documents that non-PRO imports can silently ignore attached files; its
+task response does not attest attachment storage. Local receipts therefore record
+`attachment_submitted`, not `attachment_verified`. Verify the actual filename,
+preview and size in Checkvist before accepting a deployment. Source URL metadata
+is retained as an additional reference, not as evidence of a stored attachment.
+
+A screenshot import has a durable per-report receipt and a concurrent-send lock.
+A completed resend reuses its task ID. If only the final text/tags update fails,
+a later resend updates that same item instead of importing another. Transport
+errors, throttling, server errors or ambiguous responses block further imports
+for that report; inspect the remote list and reconcile the receipt before retrying.
+No automatic retry or alternate integration is used. These changes do not backfill
+historical reports; do not resend a historical batch to populate attachments.
+The existing non-screenshot resend behavior is unchanged.
+
+The provider contract is documented at [Checkvist Open API](https://checkvist.com/auth/api).
+This release still needs independent review, green CI, human approval for the
+shared release, and controlled live acceptance; hermetic tests do not prove a
+PRO account stored a file.
+
 #### AGoodApp
 1. Enter your API token and Project ID
 2. Enable AGoodApp and add it to Destinations

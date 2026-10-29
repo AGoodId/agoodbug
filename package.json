@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --check public/js/agoodbug.js && node tools/test-screenshot-loading.js",
-    "test:php": "php -l includes/class-frontend.php && php -l agoodbug.php && php tools/test-frontend-assets.php && php -l includes/class-settings.php && php -l includes/integrations/class-checkvist.php && php tools/test-checkvist.php"
+    "test:php": "php -l includes/class-frontend.php && php -l agoodbug.php && php tools/test-frontend-assets.php && php -l includes/class-settings.php && php -l includes/integrations/class-checkvist.php && php tools/test-checkvist.php && php -l includes/integrations/class-checkvist-attachment.php && php tools/test-checkvist-native.php"
   },
   "devDependencies": {
     "playwright": "1.62.1"

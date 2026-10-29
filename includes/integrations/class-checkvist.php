@@ -72,6 +72,11 @@ class Checkvist {
 		}
 
 		$user = wp_get_current_user();
+		if ( $screenshot_url ) {
+			return ( new Checkvist_Attachment() )->send(
+				$post_id, $data['comment'], $this->build_note( $data, $user, $screenshot_url ), $destination, $username, $api_key
+			);
+		}
 
 		$api_url = self::API_URL . $list_id . '/tasks.json';
 		$task    = [
